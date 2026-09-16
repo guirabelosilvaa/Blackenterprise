@@ -622,6 +622,34 @@ export default function App() {
     });
   };
 
+  const handleImportFuel = (
+    importedMeals: MealItem[],
+    importedFuelData: Record<string, DayFuelData>,
+    importedBaseGoal: number,
+    mode: 'replace' | 'merge'
+  ) => {
+    if (mode === 'replace') {
+      saveMeals(importedMeals);
+      setFuelData(importedFuelData);
+      persistentStorage.setItem(FUEL_DATA_STORAGE_KEY, JSON.stringify(importedFuelData));
+      if (importedBaseGoal > 0) {
+        handleUpdateBaseGoal(importedBaseGoal);
+      }
+    } else {
+      const mergedMealsMap = new Map<string, MealItem>();
+      importedMeals.forEach((m) => mergedMealsMap.set(m.id, m));
+      meals.forEach((m) => mergedMealsMap.set(m.id, m));
+      saveMeals(Array.from(mergedMealsMap.values()));
+
+      const mergedFuel = { ...fuelData, ...importedFuelData };
+      setFuelData(mergedFuel);
+      persistentStorage.setItem(FUEL_DATA_STORAGE_KEY, JSON.stringify(mergedFuel));
+      if (importedBaseGoal > 0 && (!baseCalorieGoal || baseCalorieGoal === 1800)) {
+        handleUpdateBaseGoal(importedBaseGoal);
+      }
+    }
+  };
+
   // WhatsApp Share Handler
   const handleShareWhatsApp = () => {
     const dateStr = selectedFuelDate;
@@ -1432,7 +1460,7 @@ export default function App() {
             )}
           </div>
 
-          {/* Right Actions: WhatsApp Share (substituindo a nuvem; pesquisa removida) */}
+          {/* Right Actions: Nuvem (apenas em calories), WhatsApp Share, Wipe Data */}
           <div className="flex items-center gap-2.5">
             {/* Create Button (+): on Prompts and Tasks, on desktop only */}
             {!isWorkspace && !isFuel && !isMobile && (
@@ -1447,8 +1475,21 @@ export default function App() {
               </button>
             )}
 
-            {/* WhatsApp Share Button (No desktop; no mobile os botões de compartilhar e limpar ficam lá embaixo) */}
-            {!isMobile && (
+            {/* Símbolo de Nuvem: Presente em Welcome, Prompt e Tarefas (não em Calories) */}
+            {!isFuel && !isMobile && (
+              <button
+                id="btn-cloud-backup"
+                type="button"
+                onClick={() => setIsBackupOpen(true)}
+                className="relative overflow-hidden group flex items-center justify-center p-2.5 sm:p-2 rounded-xl sm:rounded-lg text-white hover:text-white bg-[#151518] hover:bg-[#1f1f24] border border-[#242429] transition-all duration-300 shadow-sm cursor-pointer shrink-0"
+                title="Backup (Importar e Exportar dados)"
+              >
+                <Cloud className="w-4 h-4 text-white" />
+              </button>
+            )}
+
+            {/* Símbolo de Compartilhar: Presente apenas na página de Calories */}
+            {(isFuel || isMobile) && (
               <button
                 id="btn-whatsapp-share-header"
                 type="button"
@@ -2136,7 +2177,7 @@ export default function App() {
           <Flame
             className={`relative z-10 w-5 h-5 sm:w-4 sm:h-4 transition-all duration-300 ${
               currentPage === 'fuel'
-                ? 'text-amber-400 opacity-100 fill-amber-400/20'
+                ? 'text-white opacity-100'
                 : 'text-zinc-500 opacity-60 hover:text-zinc-300 hover:opacity-90'
             }`}
           />
@@ -2189,7 +2230,7 @@ export default function App() {
         onDelete={handleDeleteTask}
       />
 
-      {/* Cloud Backup / Restore Modal (Supports prompts, tasks, projects, and workflows) */}
+      {/* Cloud Backup / Restore Modal (Supports prompts, tasks, projects, workflows and calories) */}
       <BackupModal
         isOpen={isBackupOpen}
         onClose={() => setIsBackupOpen(false)}
@@ -2198,11 +2239,15 @@ export default function App() {
         tasks={tasks}
         savedProjects={savedProjects}
         savedWorkflows={savedWorkflows}
+        meals={meals}
+        fuelData={fuelData}
+        baseCalorieGoal={baseCalorieGoal}
         onImportPrompts={handleImportPrompts}
         onImportTasks={handleImportTasks}
         onImportAll={handleImportAll}
         onImportProjects={handleImportProjects}
         onImportWorkflows={handleImportWorkflows}
+        onImportFuel={handleImportFuel}
       />
 
       {/* Modal de Confirmação: Excluir Todos os Dados do Site */}

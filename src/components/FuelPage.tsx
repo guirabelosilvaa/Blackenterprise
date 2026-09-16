@@ -70,6 +70,58 @@ const formatKcal = (cal: number): string => {
   return formatted.endsWith(',0') ? `${Math.round(val)}k` : `${formatted}k`;
 };
 
+// Reusable Hook for 3D Tilt, Flashlight border, and Surface glow (matching PromptCard effects)
+function useCardTiltEffect(tiltAmount = 2.5) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [mouseCoords, setMouseCoords] = useState({
+    x: 0,
+    y: 0,
+    rotateX: 0,
+    rotateY: 0,
+    isInteracting: false,
+  });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const rotateY = ((x - rect.width / 2) / (rect.width / 2)) * tiltAmount;
+    const rotateX = ((y - rect.height / 2) / (rect.height / 2)) * -tiltAmount;
+
+    setMouseCoords({
+      x,
+      y,
+      rotateX,
+      rotateY,
+      isInteracting: true,
+    });
+  };
+
+  const handleMouseEnter = () => {
+    setMouseCoords((prev) => ({ ...prev, isInteracting: true }));
+  };
+
+  const handleMouseLeave = () => {
+    setMouseCoords({
+      x: 0,
+      y: 0,
+      rotateX: 0,
+      rotateY: 0,
+      isInteracting: false,
+    });
+  };
+
+  return {
+    ref,
+    mouseCoords,
+    handleMouseMove,
+    handleMouseEnter,
+    handleMouseLeave,
+  };
+}
+
 export const FuelPage: React.FC<FuelPageProps> = ({
   meals,
   onAddMeal,
@@ -195,21 +247,10 @@ export const FuelPage: React.FC<FuelPageProps> = ({
     };
   }, [netCalories, baseCalorieGoal]);
 
-  // Subtle flashlight coordinates for top card
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [mouseCoords, setMouseCoords] = useState({
-    x: 0,
-    y: 0,
-    isInteracting: false,
-  });
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setMouseCoords({ x, y, isInteracting: true });
-  };
+  // Card effects (3D Tilt + Flashlight Hover + Subtle Reflection) identical to PromptCard
+  const mainCard = useCardTiltEffect(2.0);
+  const workoutCard = useCardTiltEffect(2.5);
+  const cardioCard = useCardTiltEffect(2.5);
 
   // Open Step 1 (Numeric Calorie popup as requested in screenshot)
   const handleOpenAddMeal = () => {
@@ -374,25 +415,58 @@ export const FuelPage: React.FC<FuelPageProps> = ({
   return (
     <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 animate-in fade-in duration-300">
       {/* ========================================================================= */}
-      {/* 1. TOP MAIN CARD: Clicável para Adicionar Refeição                         */}
+      {/* 1. TOP MAIN CARD: Clicável para Adicionar Refeição (Efeitos do PromptCard) */}
       {/* ========================================================================= */}
       <div
-        ref={cardRef}
+        ref={mainCard.ref}
         onClick={handleOpenAddMeal}
-        onMouseMove={handleMouseMove}
-        onMouseEnter={() => setMouseCoords((p) => ({ ...p, isInteracting: true }))}
-        onMouseLeave={() => setMouseCoords({ x: 0, y: 0, isInteracting: false })}
-        className="group relative w-full rounded-[28px] sm:rounded-[32px] bg-[#141416] border border-[#222226] hover:border-zinc-500 p-6 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.7)] transition-all duration-300 overflow-hidden cursor-pointer active:scale-[0.995] select-none"
+        onMouseMove={mainCard.handleMouseMove}
+        onMouseEnter={mainCard.handleMouseEnter}
+        onMouseLeave={mainCard.handleMouseLeave}
+        style={{
+          transform: mainCard.mouseCoords.isInteracting
+            ? `perspective(1000px) rotateX(${mainCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${mainCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.008, 1.008, 1.008)`
+            : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
+          transition: mainCard.mouseCoords.isInteracting
+            ? 'transform 0.08s ease-out'
+            : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
+        }}
+        className="group relative w-full rounded-[28px] sm:rounded-[32px] bg-[#141416] border border-[#222226] hover:border-[#383842] p-6 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.7)] hover:shadow-[0_16px_48px_rgba(0,0,0,0.85),0_0_25px_rgba(255,255,255,0.04)] transition-all duration-300 overflow-hidden cursor-pointer active:scale-[0.995] select-none preserve-3d"
         title="Toque para adicionar uma refeição"
       >
-        {/* Ambient flashlight glow */}
+        {/* Flashlight Border Glow (Monochromatic) */}
         <div
-          className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-300"
+          className="flashlight-layer absolute inset-0 rounded-[28px] sm:rounded-[32px] p-[1px] pointer-events-none z-10"
           style={{
-            opacity: mouseCoords.isInteracting ? 1 : 0,
-            background: mouseCoords.isInteracting
-              ? `radial-gradient(400px circle at ${mouseCoords.x}px ${mouseCoords.y}px, rgba(255, 255, 255, 0.05), transparent 75%)`
+            opacity: mainCard.mouseCoords.isInteracting ? 1 : 0,
+            background: mainCard.mouseCoords.isInteracting
+              ? `radial-gradient(340px circle at ${mainCard.mouseCoords.x}px ${mainCard.mouseCoords.y}px, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.05) 45%, transparent 75%)`
               : 'none',
+            WebkitMask:
+              'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+            WebkitMaskComposite: 'xor',
+            maskComposite: 'exclude',
+          }}
+        />
+
+        {/* Ambient flashlight surface glow */}
+        <div
+          className="flashlight-layer absolute inset-0 pointer-events-none rounded-[28px] sm:rounded-[32px] z-0 transition-opacity duration-300"
+          style={{
+            opacity: mainCard.mouseCoords.isInteracting ? 1 : 0,
+            background: mainCard.mouseCoords.isInteracting
+              ? `radial-gradient(400px circle at ${mainCard.mouseCoords.x}px ${mainCard.mouseCoords.y}px, rgba(255, 255, 255, 0.04), transparent 75%)`
+              : 'none',
+          }}
+        />
+
+        {/* Subtle monochromatic reflection */}
+        <div
+          className="holographic-foil absolute inset-0 pointer-events-none rounded-[28px] sm:rounded-[32px] z-20 pointer-events-none"
+          style={{
+            opacity: mainCard.mouseCoords.isInteracting ? 0.18 : 0,
+            background: `linear-gradient(${115 + mainCard.mouseCoords.rotateY * 2}deg, transparent 35%, rgba(255,255,255,0.08) 50%, transparent 65%)`,
+            transition: 'opacity 0.25s ease-out',
           }}
         />
 
@@ -509,68 +583,119 @@ export const FuelPage: React.FC<FuelPageProps> = ({
 
       {/* ========================================================================= */}
       {/* 2. CARDS DE TREINO E CARDIO NO ESTILO EXATO DA FOTO DO USUÁRIO             */}
-      {/* Com fonte branca e estilo limpo do site, iniciando em 0 e com check        */}
+      {/* Com efeitos do PromptCard (3D tilt + flashlight border + ambient glow)     */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {/* Card 1: Treino (Estilo Steps da foto: título + check, valor 0/210 + gráfico de barras) */}
         <div
           id="btn-toggle-workout"
+          ref={workoutCard.ref}
           onClick={handleToggleWorkout}
-          className="relative flex flex-col justify-between p-4 sm:p-5 rounded-[22px] bg-[#141416] border border-[#222226] hover:border-[#383842] transition-all duration-200 cursor-pointer shadow-sm select-none active:scale-[0.99]"
+          onMouseMove={workoutCard.handleMouseMove}
+          onMouseEnter={workoutCard.handleMouseEnter}
+          onMouseLeave={workoutCard.handleMouseLeave}
+          style={{
+            transform: workoutCard.mouseCoords.isInteracting
+              ? `perspective(1000px) rotateX(${workoutCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${workoutCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.015, 1.015, 1.015)`
+              : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
+            transition: workoutCard.mouseCoords.isInteracting
+              ? 'transform 0.08s ease-out'
+              : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
+          }}
+          className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-[22px] bg-[#141416] border border-[#222226] hover:border-[#383842] shadow-[0_4px_20px_rgba(0,0,0,0.45)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,255,255,0.04)] transition-all duration-300 cursor-pointer select-none active:scale-[0.99] preserve-3d overflow-hidden"
         >
-          {/* Top Row: Ícone + Treino + Check apenas quando selecionado (sem círculo) */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Dumbbell className={`w-4 h-4 ${isWorkoutDone ? 'text-white' : 'text-zinc-400'}`} />
-              <span className="text-xs sm:text-sm font-medium text-white tracking-tight">
-                Treino
-              </span>
-            </div>
-            {/* Check apenas quando selecionado, sem círculo */}
-            <div className="w-5 h-5 flex items-center justify-end">
-              {isWorkoutDone && (
-                <Check className="w-4 h-4 text-white stroke-[2.5]" />
-              )}
-            </div>
-          </div>
+          {/* Flashlight Border Glow (Monochromatic) */}
+          <div
+            className="flashlight-layer absolute inset-0 rounded-[22px] p-[1px] pointer-events-none z-10"
+            style={{
+              opacity: workoutCard.mouseCoords.isInteracting ? 1 : 0,
+              background: workoutCard.mouseCoords.isInteracting
+                ? `radial-gradient(220px circle at ${workoutCard.mouseCoords.x}px ${workoutCard.mouseCoords.y}px, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.05) 40%, transparent 75%)`
+                : 'none',
+              WebkitMask:
+                'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+              WebkitMaskComposite: 'xor',
+              maskComposite: 'exclude',
+            }}
+          />
 
-          {/* Bottom Row: Valor (inicia em 0, e selecionado aparece 210) e Gráfico com opacidade bem mais baixa sem seleção */}
-          <div className="flex items-end justify-between mt-5 pt-1">
-            <div className="flex flex-col">
-              <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
-                {isWorkoutDone ? '210' : '0'}
-              </span>
-              <span className="text-xs text-zinc-400 font-medium mt-1">
-                kcal
-              </span>
+          {/* Flashlight Ambient Surface Glow */}
+          <div
+            className="flashlight-layer absolute inset-0 pointer-events-none rounded-[22px] z-0"
+            style={{
+              opacity: workoutCard.mouseCoords.isInteracting ? 1 : 0,
+              background: workoutCard.mouseCoords.isInteracting
+                ? `radial-gradient(260px circle at ${workoutCard.mouseCoords.x}px ${workoutCard.mouseCoords.y}px, rgba(255, 255, 255, 0.035), transparent 75%)`
+                : 'none',
+            }}
+          />
+
+          {/* Subtle reflection */}
+          <div
+            className="holographic-foil absolute inset-0 pointer-events-none rounded-[22px] z-20 pointer-events-none"
+            style={{
+              opacity: workoutCard.mouseCoords.isInteracting ? 0.22 : 0,
+              background: `linear-gradient(${115 + workoutCard.mouseCoords.rotateY * 2}deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)`,
+              transition: 'opacity 0.25s ease-out',
+            }}
+          />
+
+          {/* Content layer */}
+          <div className="relative z-10 flex flex-col justify-between h-full">
+            {/* Top Row: Ícone + Treino + Check apenas quando selecionado (sem círculo) */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Dumbbell className={`w-4 h-4 ${isWorkoutDone ? 'text-white' : 'text-zinc-400'}`} />
+                <span className="text-xs sm:text-sm font-medium text-white tracking-tight">
+                  Treino
+                </span>
+              </div>
+              {/* Check apenas quando selecionado, sem círculo */}
+              <div className="w-5 h-5 flex items-center justify-end">
+                {isWorkoutDone && (
+                  <Check className="w-4 h-4 text-white stroke-[2.5]" />
+                )}
+              </div>
             </div>
 
-            {/* Gráfico de Barras Verticais arredondadas (com opacidade bem mais baixa quando desmarcado) */}
-            <div className={`flex items-end gap-1.5 h-10 pb-0.5 transition-opacity duration-300 ${isWorkoutDone ? 'opacity-100' : 'opacity-[0.07]'}`}>
-              <div
-                className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
-                  isWorkoutDone ? 'bg-zinc-300' : 'bg-zinc-700'
-                }`}
-                style={{ height: '40%' }}
-              />
-              <div
-                className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
-                  isWorkoutDone ? 'bg-zinc-200' : 'bg-zinc-600'
-                }`}
-                style={{ height: '65%' }}
-              />
-              <div
-                className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
-                  isWorkoutDone ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'bg-zinc-400'
-                }`}
-                style={{ height: '100%' }}
-              />
-              <div
-                className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
-                  isWorkoutDone ? 'bg-zinc-300' : 'bg-zinc-700'
-                }`}
-                style={{ height: '50%' }}
-              />
+            {/* Bottom Row: Valor (inicia em 0, e selecionado aparece 210) e Gráfico com opacidade bem mais baixa sem seleção */}
+            <div className="flex items-end justify-between mt-5 pt-1">
+              <div className="flex flex-col">
+                <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
+                  {isWorkoutDone ? '210' : '0'}
+                </span>
+                <span className="text-xs text-zinc-400 font-medium mt-1">
+                  kcal
+                </span>
+              </div>
+
+              {/* Gráfico de Barras Verticais arredondadas (com opacidade bem mais baixa quando desmarcado) */}
+              <div className={`flex items-end gap-1.5 h-10 pb-0.5 transition-opacity duration-300 ${isWorkoutDone ? 'opacity-100' : 'opacity-[0.07]'}`}>
+                <div
+                  className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
+                    isWorkoutDone ? 'bg-zinc-300' : 'bg-zinc-700'
+                  }`}
+                  style={{ height: '40%' }}
+                />
+                <div
+                  className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
+                    isWorkoutDone ? 'bg-zinc-200' : 'bg-zinc-600'
+                  }`}
+                  style={{ height: '65%' }}
+                />
+                <div
+                  className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
+                    isWorkoutDone ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'bg-zinc-400'
+                  }`}
+                  style={{ height: '100%' }}
+                />
+                <div
+                  className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
+                    isWorkoutDone ? 'bg-zinc-300' : 'bg-zinc-700'
+                  }`}
+                  style={{ height: '50%' }}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -578,52 +703,103 @@ export const FuelPage: React.FC<FuelPageProps> = ({
         {/* Card 2: Cardio (Estilo Water da foto: título + check, valor 0/200 + linha de onda) */}
         <div
           id="btn-toggle-cardio"
+          ref={cardioCard.ref}
           onClick={handleToggleCardio}
-          className="relative flex flex-col justify-between p-4 sm:p-5 rounded-[22px] bg-[#141416] border border-[#222226] hover:border-[#383842] transition-all duration-200 cursor-pointer shadow-sm select-none active:scale-[0.99]"
+          onMouseMove={cardioCard.handleMouseMove}
+          onMouseEnter={cardioCard.handleMouseEnter}
+          onMouseLeave={cardioCard.handleMouseLeave}
+          style={{
+            transform: cardioCard.mouseCoords.isInteracting
+              ? `perspective(1000px) rotateX(${cardioCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${cardioCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.015, 1.015, 1.015)`
+              : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
+            transition: cardioCard.mouseCoords.isInteracting
+              ? 'transform 0.08s ease-out'
+              : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
+          }}
+          className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-[22px] bg-[#141416] border border-[#222226] hover:border-[#383842] shadow-[0_4px_20px_rgba(0,0,0,0.45)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,255,255,0.04)] transition-all duration-300 cursor-pointer select-none active:scale-[0.99] preserve-3d overflow-hidden"
         >
-          {/* Top Row: Ícone + Cardio + Check apenas quando selecionado (sem círculo) */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className={`w-4 h-4 ${isCardioDone ? 'text-white' : 'text-zinc-400'}`} />
-              <span className="text-xs sm:text-sm font-medium text-white tracking-tight">
-                Cardio
-              </span>
-            </div>
-            {/* Check apenas quando selecionado, sem círculo */}
-            <div className="w-5 h-5 flex items-center justify-end">
-              {isCardioDone && (
-                <Check className="w-4 h-4 text-white stroke-[2.5]" />
-              )}
-            </div>
-          </div>
+          {/* Flashlight Border Glow (Monochromatic) */}
+          <div
+            className="flashlight-layer absolute inset-0 rounded-[22px] p-[1px] pointer-events-none z-10"
+            style={{
+              opacity: cardioCard.mouseCoords.isInteracting ? 1 : 0,
+              background: cardioCard.mouseCoords.isInteracting
+                ? `radial-gradient(220px circle at ${cardioCard.mouseCoords.x}px ${cardioCard.mouseCoords.y}px, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.05) 40%, transparent 75%)`
+                : 'none',
+              WebkitMask:
+                'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+              WebkitMaskComposite: 'xor',
+              maskComposite: 'exclude',
+            }}
+          />
 
-          {/* Bottom Row: Valor (inicia em 0, e selecionado aparece 200) e Linha com opacidade bem mais baixa sem seleção */}
-          <div className="flex items-end justify-between mt-5 pt-1">
-            <div className="flex flex-col">
-              <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
-                {isCardioDone ? '200' : '0'}
-              </span>
-              <span className="text-xs text-zinc-400 font-medium mt-1">
-                kcal
-              </span>
+          {/* Flashlight Ambient Surface Glow */}
+          <div
+            className="flashlight-layer absolute inset-0 pointer-events-none rounded-[22px] z-0"
+            style={{
+              opacity: cardioCard.mouseCoords.isInteracting ? 1 : 0,
+              background: cardioCard.mouseCoords.isInteracting
+                ? `radial-gradient(260px circle at ${cardioCard.mouseCoords.x}px ${cardioCard.mouseCoords.y}px, rgba(255, 255, 255, 0.035), transparent 75%)`
+                : 'none',
+            }}
+          />
+
+          {/* Subtle reflection */}
+          <div
+            className="holographic-foil absolute inset-0 pointer-events-none rounded-[22px] z-20 pointer-events-none"
+            style={{
+              opacity: cardioCard.mouseCoords.isInteracting ? 0.22 : 0,
+              background: `linear-gradient(${115 + cardioCard.mouseCoords.rotateY * 2}deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)`,
+              transition: 'opacity 0.25s ease-out',
+            }}
+          />
+
+          {/* Content layer */}
+          <div className="relative z-10 flex flex-col justify-between h-full">
+            {/* Top Row: Ícone + Cardio + Check apenas quando selecionado (sem círculo) */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className={`w-4 h-4 ${isCardioDone ? 'text-white' : 'text-zinc-400'}`} />
+                <span className="text-xs sm:text-sm font-medium text-white tracking-tight">
+                  Cardio
+                </span>
+              </div>
+              {/* Check apenas quando selecionado, sem círculo */}
+              <div className="w-5 h-5 flex items-center justify-end">
+                {isCardioDone && (
+                  <Check className="w-4 h-4 text-white stroke-[2.5]" />
+                )}
+              </div>
             </div>
 
-            {/* Linha em formato de onda suave em SVG (com opacidade bem mais baixa quando desmarcado) */}
-            <div className={`w-16 sm:w-20 h-10 flex items-center justify-end transition-opacity duration-300 ${isCardioDone ? 'opacity-100' : 'opacity-[0.07]'}`}>
-              <svg viewBox="0 0 80 40" className="w-full h-full overflow-visible">
-                <path
-                  d="M 2,28 Q 12,28 20,20 T 38,18 T 54,8 T 68,26 T 78,22"
-                  fill="none"
-                  stroke={isCardioDone ? '#ffffff' : '#a1a1aa'}
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="transition-all duration-300"
-                  style={{
-                    filter: isCardioDone ? 'drop-shadow(0 0 4px rgba(255,255,255,0.4))' : 'none',
-                  }}
-                />
-              </svg>
+            {/* Bottom Row: Valor (inicia em 0, e selecionado aparece 200) e Linha com opacidade bem mais baixa sem seleção */}
+            <div className="flex items-end justify-between mt-5 pt-1">
+              <div className="flex flex-col">
+                <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
+                  {isCardioDone ? '200' : '0'}
+                </span>
+                <span className="text-xs text-zinc-400 font-medium mt-1">
+                  kcal
+                </span>
+              </div>
+
+              {/* Linha em formato de onda suave em SVG (com opacidade bem mais baixa quando desmarcado) */}
+              <div className={`w-16 sm:w-20 h-10 flex items-center justify-end transition-opacity duration-300 ${isCardioDone ? 'opacity-100' : 'opacity-[0.07]'}`}>
+                <svg viewBox="0 0 80 40" className="w-full h-full overflow-visible">
+                  <path
+                    d="M 2,28 Q 12,28 20,20 T 38,18 T 54,8 T 68,26 T 78,22"
+                    fill="none"
+                    stroke={isCardioDone ? '#ffffff' : '#a1a1aa'}
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="transition-all duration-300"
+                    style={{
+                      filter: isCardioDone ? 'drop-shadow(0 0 4px rgba(255,255,255,0.4))' : 'none',
+                    }}
+                  />
+                </svg>
+              </div>
             </div>
           </div>
         </div>
@@ -708,15 +884,15 @@ export const FuelPage: React.FC<FuelPageProps> = ({
 
       {/* ========================================================================= */}
       {/* POPUP STEP 1: DIGITAR APENAS O VALOR DAS CALORIAS (Layout da imagem)      */}
-      {/* Botão OK agora em BRANCO com texto PRETO                                  */}
+      {/* Movido mais para cima na view celular (pt-20 items-start no mobile)        */}
       {/* ========================================================================= */}
       <AnimatePresence>
         {addMealStep === 'calories' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center pt-20 sm:pt-0 p-4 bg-black/75 backdrop-blur-md">
             <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 15 }}
+              initial={{ opacity: 0, scale: 0.94, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 15 }}
+              exit={{ opacity: 0, scale: 0.94, y: -10 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="relative w-full max-w-sm rounded-[24px] bg-[#16161a] border border-[#2c2c34] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.85)] flex flex-col gap-4"
             >
@@ -772,15 +948,15 @@ export const FuelPage: React.FC<FuelPageProps> = ({
 
       {/* ========================================================================= */}
       {/* POPUP STEP 2: IGUAL AO POPUP 1, APENAS PEDINDO O NOME                      */}
-      {/* Sem poluição, horário é automático, OK estilo do site                      */}
+      {/* Movido mais para cima na view celular (pt-20 items-start no mobile)        */}
       {/* ========================================================================= */}
       <AnimatePresence>
         {addMealStep === 'name' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center pt-20 sm:pt-0 p-4 bg-black/75 backdrop-blur-md">
             <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 15 }}
+              initial={{ opacity: 0, scale: 0.94, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 15 }}
+              exit={{ opacity: 0, scale: 0.94, y: -10 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
               className="relative w-full max-w-sm rounded-[24px] bg-[#16161a] border border-[#2c2c34] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.85)] flex flex-col gap-4"
             >
@@ -832,7 +1008,7 @@ export const FuelPage: React.FC<FuelPageProps> = ({
       {/* ========================================================================= */}
       <AnimatePresence>
         {isEditModalOpen && editingMeal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center pt-16 sm:pt-0 p-4 bg-black/75 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PromptItem, TaskItem } from '../types';
+import { PromptItem, TaskItem, MealItem, DayFuelData } from '../types';
 import {
   X,
   Download,
@@ -14,6 +14,7 @@ import {
   Layers,
   FileText,
   CheckSquare,
+  Flame,
 } from 'lucide-react';
 
 interface BackupModalProps {
@@ -24,11 +25,15 @@ interface BackupModalProps {
   tasks: TaskItem[];
   savedProjects?: string[];
   savedWorkflows?: string[];
+  meals?: MealItem[];
+  fuelData?: Record<string, DayFuelData>;
+  baseCalorieGoal?: number;
   onImportPrompts: (imported: PromptItem[], mode: 'replace' | 'merge') => void;
   onImportTasks: (imported: TaskItem[], mode: 'replace' | 'merge') => void;
   onImportAll: (prompts: PromptItem[], tasks: TaskItem[], mode: 'replace' | 'merge') => void;
   onImportProjects?: (projects: string[], mode?: 'replace' | 'merge') => void;
   onImportWorkflows?: (workflows: string[], mode: 'replace' | 'merge') => void;
+  onImportFuel?: (meals: MealItem[], fuelData: Record<string, DayFuelData>, baseCalorieGoal: number, mode: 'replace' | 'merge') => void;
 }
 
 export const BackupModal: React.FC<BackupModalProps> = ({
@@ -39,11 +44,15 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   tasks,
   savedProjects = [],
   savedWorkflows = [],
+  meals = [],
+  fuelData = {},
+  baseCalorieGoal = 1800,
   onImportPrompts,
   onImportTasks,
   onImportAll,
   onImportProjects,
   onImportWorkflows,
+  onImportFuel,
 }) => {
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -111,8 +120,17 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           notes: t.notes || '',
         };
       }),
+      meals: meals.map((m) => ({
+        id: m.id,
+        name: m.name,
+        calories: Number(m.calories) || 0,
+        time: m.time || '',
+        date: m.date || '',
+      })),
+      fuelData,
+      baseCalorieGoal,
     };
-  }, [prompts, tasks, savedProjects, savedWorkflows]);
+  }, [prompts, tasks, savedProjects, savedWorkflows, meals, fuelData, baseCalorieGoal]);
 
   const backupJson = JSON.stringify(backupData, null, 2);
 
@@ -156,14 +174,34 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
     let parsedPrompts: PromptItem[] = [];
     let parsedTasks: TaskItem[] = [];
+    let parsedMeals: MealItem[] = [];
+    let parsedFuelData: Record<string, DayFuelData> = {};
+    let parsedBaseGoal: number = 0;
 
-    // Case 1: Unified object with prompts and/or tasks
+    // Case 1: Unified object with prompts and/or tasks and/or meals
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       if (Array.isArray(parsed.prompts)) {
         parsedPrompts = validatePromptsList(parsed.prompts);
       }
       if (Array.isArray(parsed.tasks)) {
         parsedTasks = validateTasksList(parsed.tasks);
+      }
+      if (Array.isArray(parsed.meals)) {
+        parsedMeals = parsed.meals
+          .filter((m: any) => m && (m.name || m.calories))
+          .map((m: any, idx: number) => ({
+            id: m.id || `meal-imported-${Date.now()}-${idx}`,
+            name: String(m.name || 'Refeição'),
+            calories: Number(m.calories) || 0,
+            time: String(m.time || ''),
+            date: String(m.date || ''),
+          }));
+      }
+      if (parsed.fuelData && typeof parsed.fuelData === 'object') {
+        parsedFuelData = parsed.fuelData;
+      }
+      if (parsed.baseCalorieGoal && typeof parsed.baseCalorieGoal === 'number') {
+        parsedBaseGoal = parsed.baseCalorieGoal;
       }
     } else if (Array.isArray(parsed)) {
       // Case 2: Array of objects - detect whether it's prompts or tasks
@@ -192,8 +230,13 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       }
     }
 
-    if (parsedPrompts.length === 0 && parsedTasks.length === 0) {
-      throw new Error('Nenhum dado válido de prompts ou tarefas encontrado no JSON.');
+    if (
+      parsedPrompts.length === 0 &&
+      parsedTasks.length === 0 &&
+      parsedMeals.length === 0 &&
+      Object.keys(parsedFuelData).length === 0
+    ) {
+      throw new Error('Nenhum dado válido de prompts, tarefas ou calorias encontrado no JSON.');
     }
 
     // Extract projects if present in the backup or from imported tasks
@@ -247,6 +290,14 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     } else if (parsedTasks.length > 0) {
       onImportTasks(parsedTasks, importMode);
       setSuccessMsg(`${parsedTasks.length} tarefas sincronizadas!`);
+    }
+
+    // Apply fuel import
+    if ((parsedMeals.length > 0 || Object.keys(parsedFuelData).length > 0) && onImportFuel) {
+      onImportFuel(parsedMeals, parsedFuelData, parsedBaseGoal, importMode);
+      if (parsedPrompts.length === 0 && parsedTasks.length === 0) {
+        setSuccessMsg(`${parsedMeals.length} refeições e metas de calorias sincronizadas!`);
+      }
     }
 
     setImportConfirmed(true);
