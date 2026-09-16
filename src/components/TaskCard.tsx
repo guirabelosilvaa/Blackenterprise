@@ -152,7 +152,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         id={`btn-complete-task-${task.id}`}
         onClick={() => onToggleComplete && onToggleComplete(task.id)}
         aria-label={isCompleted ? 'Marcar como não concluída' : 'Marcar como concluída'}
-        className="relative group/circle flex items-center justify-center w-6 h-6 sm:w-6.5 sm:h-6.5 shrink-0 rounded-full cursor-pointer select-none transition-all duration-200 outline-none"
+        className="relative group/circle flex items-center justify-center w-7 h-7 sm:w-6.5 sm:h-6.5 shrink-0 rounded-full cursor-pointer select-none transition-all duration-200 outline-none"
       >
         {isCompleted ? (
           /* Completed: Green background with white check mark */
@@ -161,7 +161,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             animate={{ scale: 1, opacity: 1 }}
             className="w-full h-full rounded-full bg-emerald-500 border border-emerald-400 flex items-center justify-center shadow-[0_0_12px_rgba(16,185,129,0.4)]"
           >
-            <Check className="w-3.5 h-3.5 text-white stroke-[3.2]" />
+            <Check className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-white stroke-[3.2]" />
           </motion.div>
         ) : (
           /* Not completed: Circle with outline + circulating animated contour on hover */
@@ -176,10 +176,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 cx="12"
                 cy="12"
                 r="9"
-                stroke="#3f3f46"
+                stroke="#4a4a52"
                 strokeWidth="1.8"
                 fill="transparent"
-                className="transition-colors duration-200 group-hover/circle:stroke-zinc-400"
+                className="transition-colors duration-200 group-hover/circle:stroke-zinc-300"
               />
 
               {/* Animated stroke running around the circle on hover */}
@@ -373,10 +373,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   e.stopPropagation();
                   onMoveToToday(task.id);
                 }}
-                className={`p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-[#222227] transition-all cursor-pointer ${
+                className={`p-2 sm:p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-[#222227] transition-all cursor-pointer ${
                   isHovered
                     ? 'opacity-100 scale-100 pointer-events-auto'
-                    : 'opacity-0 scale-90 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto'
+                    : 'opacity-70 sm:opacity-0 scale-95 sm:scale-90 pointer-events-auto sm:pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto'
                 }`}
                 title="Colocar no dia de hoje"
               >
@@ -388,7 +388,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <button
                 id={`btn-edit-task-${task.id}`}
                 onClick={handleEdit}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-[#222227] transition-all cursor-pointer"
+                className="p-2 sm:p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-[#222227] transition-all cursor-pointer"
                 title="Editar tarefa"
               >
                 <Pencil className="w-3.5 h-3.5 text-white" />

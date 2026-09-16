@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PromptItem, TaskItem, TaskCategoryType } from './types';
+import { PromptItem, TaskItem, TaskCategoryType, MealItem, DayFuelData } from './types';
 import { PromptCard } from './components/PromptCard';
 import { PromptModal } from './components/PromptModal';
 import { NewPromptModal } from './components/NewPromptModal';
@@ -8,7 +8,9 @@ import { TaskCard } from './components/TaskCard';
 import { NewTaskModal } from './components/NewTaskModal';
 import { WeekTaskbar } from './components/WeekTaskbar';
 import { BackupModal } from './components/BackupModal';
+import { FuelPage } from './components/FuelPage';
 import { filterTasksWithinWindow } from './utils/taskRules';
+import { persistentStorage } from './utils/cookieStorage';
 import {
   Image as ImageIcon,
   Video,
@@ -28,6 +30,8 @@ import {
   Folder,
   MessageSquare,
   Check,
+  Flame,
+  Share2,
 } from 'lucide-react';
 
 const PROMPTS_STORAGE_KEY = 'promptvault_user_prompts_v3';
@@ -35,6 +39,9 @@ const TASKS_STORAGE_KEY = 'promptvault_user_tasks_v3';
 const PROJECTS_STORAGE_KEY = 'promptvault_user_projects_v1';
 const WORKFLOWS_STORAGE_KEY = 'promptvault_user_workflows_v1';
 const TASK_TYPE_STORAGE_KEY = 'promptvault_user_task_type_v1';
+const MEALS_STORAGE_KEY = 'promptvault_user_meals_v1';
+const CALORIE_GOAL_STORAGE_KEY = 'promptvault_user_calorie_goal_v1';
+const FUEL_DATA_STORAGE_KEY = 'promptvault_user_fuel_data_v1';
 
 const getTodayIso = () => {
   const d = new Date();
@@ -105,13 +112,38 @@ const INITIAL_TASKS: TaskItem[] = [
   },
 ];
 
-type PageKey = 'workspace' | 'prompts' | 'tasks';
+type PageKey = 'workspace' | 'prompts' | 'tasks' | 'fuel';
 
 const PAGE_INDEX_MAP: Record<PageKey, number> = {
   workspace: 0,
   prompts: 1,
   tasks: 2,
+  fuel: 3,
 };
+
+const INITIAL_MEALS: MealItem[] = [
+  {
+    id: 'meal-init-1',
+    name: 'Café da manhã: Ovos mexidos e torrada',
+    calories: 420,
+    date: getTodayIso(),
+    time: '08:30',
+  },
+  {
+    id: 'meal-init-2',
+    name: 'Almoço: Frango grelhado e arroz integral',
+    calories: 580,
+    date: getTodayIso(),
+    time: '12:45',
+  },
+  {
+    id: 'meal-init-3',
+    name: 'Lanche: Iogurte natural com castanhas',
+    calories: 200,
+    date: getTodayIso(),
+    time: '16:15',
+  },
+];
 
 // Projeto acima do chat com visual limpo do card de prompt
 interface AgentProjectPillProps {
@@ -482,6 +514,163 @@ export default function App() {
   const isTasks = currentPage === 'tasks';
   const isPrompts = currentPage === 'prompts';
   const isWorkspace = currentPage === 'workspace';
+  const isFuel = currentPage === 'fuel';
+
+  // --- Meals & Fuel State with Cookies + LocalStorage synchronization ---
+  const [meals, setMeals] = useState<MealItem[]>(() => {
+    try {
+      const stored = persistentStorage.getItem(MEALS_STORAGE_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_MEALS;
+  });
+
+  const [baseCalorieGoal, setBaseCalorieGoal] = useState<number>(() => {
+    try {
+      const stored = persistentStorage.getItem(CALORIE_GOAL_STORAGE_KEY);
+      if (stored) return Number(stored) || 1800;
+    } catch (e) {
+      console.error(e);
+    }
+    return 1800;
+  });
+
+  const [selectedFuelDate, setSelectedFuelDate] = useState<string>(getTodayIso());
+
+  // Detect mobile view (< 640px)
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 640;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const [fuelData, setFuelData] = useState<Record<string, DayFuelData>>(() => {
+    try {
+      const stored = persistentStorage.getItem(FUEL_DATA_STORAGE_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return {};
+  });
+
+  const saveMeals = (updated: MealItem[]) => {
+    setMeals(updated);
+    persistentStorage.setItem(MEALS_STORAGE_KEY, JSON.stringify(updated));
+  };
+
+  const handleAddMeal = (newMealData: Omit<MealItem, 'id'>) => {
+    const newMeal: MealItem = {
+      ...newMealData,
+      id: `meal-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    saveMeals([newMeal, ...meals]);
+  };
+
+  const handleUpdateMeal = (updatedMeal: MealItem) => {
+    const updated = meals.map((m) => (m.id === updatedMeal.id ? updatedMeal : m));
+    saveMeals(updated);
+  };
+
+  const handleDeleteMeal = (id: string) => {
+    const updated = meals.filter((m) => m.id !== id);
+    saveMeals(updated);
+    showNotification('Refeição excluída');
+  };
+
+  const handleClearDayMeals = (date: string) => {
+    const updated = meals.filter((m) => m.date !== date);
+    saveMeals(updated);
+  };
+
+  const handleUpdateBaseGoal = (newGoal: number) => {
+    setBaseCalorieGoal(newGoal);
+    persistentStorage.setItem(CALORIE_GOAL_STORAGE_KEY, String(newGoal));
+  };
+
+  const handleUpdateDayFuel = (date: string, data: Partial<DayFuelData>) => {
+    setFuelData((prev) => {
+      const existing = prev[date] || {
+        date,
+        calorieGoal: baseCalorieGoal,
+        waterMl: 1200,
+        waterGoalMl: 2000,
+        steps: 1750,
+        stepsGoal: 8000,
+      };
+      const updated = {
+        ...prev,
+        [date]: {
+          ...existing,
+          ...data,
+        },
+      };
+      persistentStorage.setItem(FUEL_DATA_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // WhatsApp Share Handler
+  const handleShareWhatsApp = () => {
+    const dateStr = selectedFuelDate;
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    const days = [
+      'Domingo',
+      'Segunda-feira',
+      'Terça-feira',
+      'Quarta-feira',
+      'Quinta-feira',
+      'Sexta-feira',
+      'Sábado',
+    ];
+    const dayName = days[d.getDay()] || 'Dia';
+    const shortDate = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}`;
+
+    const dayMeals = meals.filter((m) => m.date === dateStr);
+    const consumed = dayMeals.reduce((acc, m) => acc + (Number(m.calories) || 0), 0);
+    const dayFuel = fuelData[dateStr] || {};
+    const isWorkout = Boolean(dayFuel.workoutDone);
+    const isCardio = Boolean(dayFuel.cardioDone);
+    const burned = (isWorkout ? 210 : 0) + (isCardio ? 200 : 0);
+    const net = Math.max(0, consumed - burned);
+    const deficit = (baseCalorieGoal || 1800) - net;
+
+    const lines = [
+      `Dia da semana: ${dayName} (${shortDate})`,
+      `Kcal consumidas: ${consumed} kcal`,
+      `Defict: ${deficit} kcal`,
+    ];
+
+    if (isWorkout) {
+      lines.push('Treino: Realizado (-210 kcal)');
+    }
+    if (isCardio) {
+      lines.push('Cardio: Realizado (-200 kcal)');
+    }
+
+    const message = lines.join('\n');
+    try {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(message);
+      }
+    } catch {}
+
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
+    showNotification('Compartilhando no WhatsApp...');
+  };
 
   // 7-day bar state for tasks: default is today!
   const [selectedTaskDate, setSelectedTaskDate] = useState<string>(getTodayIso());
@@ -992,8 +1181,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Minimalist Header */}
-      <header className="w-full pt-16 sm:pt-20 pb-4 px-6 sm:px-10 max-w-7xl mx-auto flex flex-col">
+      {/* Main Minimalist Header (Compact on mobile / Fuel view) */}
+      <header className={`w-full ${isMobile ? 'pt-4 pb-2 px-4' : 'pt-16 sm:pt-20 pb-4 px-6 sm:px-10'} max-w-7xl mx-auto flex flex-col`}>
         <div className="flex items-center justify-between border-b border-[#1c1c1f] pb-3 pt-1">
           {/* Left: Media Filters on Prompts; blank/clean on Tasks & Workspace */}
           <div className="relative flex items-center gap-1.5 min-h-[36px]">
@@ -1243,97 +1432,41 @@ export default function App() {
             )}
           </div>
 
-          {/* Right Actions: Search & Cloud Sync Button (o botão + foi movido para a taskbar) */}
+          {/* Right Actions: WhatsApp Share (substituindo a nuvem; pesquisa removida) */}
           <div className="flex items-center gap-2.5">
-            {/* Search: expandable on click, collapses outside */}
-            {!isWorkspace && (
-              <div ref={searchContainerRef} className="relative flex items-center shrink-0">
-                <AnimatePresence initial={false} mode="wait">
-                  {isSearchOpen ? (
-                    <motion.div
-                      key="search-input-active"
-                      initial={{ width: 0, opacity: 0 }}
-                      animate={{ width: 170, opacity: 1 }}
-                      exit={{ width: 0, opacity: 0 }}
-                      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-                      className="flex items-center gap-1.5 overflow-hidden pl-1"
-                    >
-                      <Search className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                      <input
-                        type="text"
-                        id="header-search-input"
-                        autoFocus
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder=""
-                        className="w-36 py-1 px-1 text-xs bg-transparent border-none text-white focus:outline-none placeholder-transparent"
-                      />
-                    </motion.div>
-                  ) : (
-                    <motion.button
-                      key="search-icon-trigger"
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ duration: 0.15 }}
-                      id="btn-open-search"
-                      type="button"
-                      onClick={() => setIsSearchOpen(true)}
-                      className="flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer shrink-0"
-                      title="Pesquisar"
-                    >
-                      <Search className="w-4 h-4" />
-                    </motion.button>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
-
-            {/* Create Button (+): on Prompts and Tasks, placed beside the Cloud button, styled identically to the cloud icon without click animation */}
-            {!isWorkspace && (
+            {/* Create Button (+): on Prompts and Tasks, on desktop only */}
+            {!isWorkspace && !isFuel && !isMobile && (
               <button
                 type="button"
                 id="btn-header-add-item"
                 onClick={handleHeaderPlusClick}
-                className="relative overflow-hidden group flex items-center justify-center p-2 rounded-lg text-white hover:text-white bg-[#151518] hover:bg-[#1f1f24] border border-[#242429] transition-all duration-300 shadow-sm cursor-pointer shrink-0"
+                className="relative overflow-hidden group flex items-center justify-center p-2.5 sm:p-2 rounded-xl sm:rounded-lg text-white hover:text-white bg-[#151518] hover:bg-[#1f1f24] border border-[#242429] transition-all duration-300 shadow-sm cursor-pointer shrink-0"
                 title={isTasks ? 'Criar Tarefa' : 'Criar Prompt'}
               >
                 <Plus className="w-4 h-4 text-white stroke-[2.4]" />
               </button>
             )}
 
-            {/* Cloud Button (Import / Export) */}
-            <button
-              id="btn-cloud-sync"
-              onClick={handleOpenBackup}
-              className={`relative overflow-hidden group flex items-center justify-center p-2 rounded-lg transition-all duration-300 shadow-sm cursor-pointer shrink-0 ${
-                cloudActive
-                  ? 'bg-gradient-to-b from-[#60a5fa] via-[#3b82f6] to-[#2563eb] border border-[#93c5fd]/90 shadow-[0_0_18px_rgba(59,130,246,0.6)]'
-                  : 'text-white hover:text-white bg-[#151518] hover:bg-[#1f1f24] border border-[#242429]'
-              }`}
-              title={
-                isWorkspace
-                  ? 'Backup Geral'
-                  : isTasks
-                  ? 'Backup de Tarefas'
-                  : 'Backup de Prompts'
-              }
-            >
-              {cloudActive && <span className="metallic-shine-layer" />}
-              {cloudActive ? (
-                <CheckCircle2 className="w-4 h-4 text-white animate-check-pop" />
-              ) : (
-                <Cloud className="w-4 h-4 text-white" />
-              )}
-            </button>
+            {/* WhatsApp Share Button (No desktop; no mobile os botões de compartilhar e limpar ficam lá embaixo) */}
+            {!isMobile && (
+              <button
+                id="btn-whatsapp-share-header"
+                type="button"
+                onClick={handleShareWhatsApp}
+                className="relative overflow-hidden group flex items-center justify-center p-2.5 sm:p-2 rounded-xl sm:rounded-lg text-white hover:text-white bg-[#151518] hover:bg-[#1f1f24] border border-[#242429] transition-all duration-300 shadow-sm cursor-pointer shrink-0"
+                title="Compartilhar resumo no WhatsApp"
+              >
+                <Share2 className="w-4 h-4 text-white" />
+              </button>
+            )}
 
             {/* Trash Button on Workspace page: clears prompts, tasks, projects */}
-            {isWorkspace && (
+            {isWorkspace && !isMobile && (
               <button
                 id="btn-wipe-all-data"
                 type="button"
                 onClick={() => setIsWipeModalOpen(true)}
-                className="flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-red-400 bg-[#151518] hover:bg-red-950/30 border border-[#242429] hover:border-red-900/50 transition-all cursor-pointer shrink-0"
+                className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-xl sm:rounded-lg text-zinc-400 hover:text-red-400 bg-[#151518] hover:bg-red-950/30 border border-[#242429] hover:border-red-900/50 transition-all cursor-pointer shrink-0"
                 title="Excluir todos os dados do site (prompts, tarefas e projetos)"
               >
                 <Trash2 className="w-4 h-4" />
@@ -1344,9 +1477,27 @@ export default function App() {
       </header>
 
       {/* Main Area with Smooth Slide Transition between Pages */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 sm:px-10 pt-6 pb-28">
-        <AnimatePresence mode="wait" custom={pageDirection}>
-          {isWorkspace ? (
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-10 pt-4 sm:pt-6 pb-12 sm:pb-28">
+        {isMobile ? (
+          <div className="w-full">
+            <FuelPage
+              meals={meals}
+              onAddMeal={handleAddMeal}
+              onUpdateMeal={handleUpdateMeal}
+              onDeleteMeal={handleDeleteMeal}
+              onClearDayMeals={handleClearDayMeals}
+              baseCalorieGoal={baseCalorieGoal}
+              onUpdateBaseGoal={handleUpdateBaseGoal}
+              fuelData={fuelData}
+              onUpdateDayFuel={handleUpdateDayFuel}
+              showNotification={showNotification}
+              selectedDate={selectedFuelDate}
+              onSelectDate={setSelectedFuelDate}
+            />
+          </div>
+        ) : (
+          <AnimatePresence mode="wait" custom={pageDirection}>
+            {isWorkspace ? (
             /* ======================================================== */
             /* WORKSPACE PAGE (Center text & AI Agent input box)        */
             /* ======================================================== */
@@ -1691,7 +1842,7 @@ export default function App() {
                 </div>
               ) : null}
             </motion.div>
-          ) : (
+          ) : isTasks ? (
             /* ======================================================== */
             /* TASKS PAGE                                               */
             /* ======================================================== */
@@ -1823,22 +1974,68 @@ export default function App() {
                 </AnimatePresence>
               </div>
             </motion.div>
+          ) : (
+            /* ======================================================== */
+            /* FUEL / CALORIE COUNTER PAGE                              */
+            /* ======================================================== */
+            <motion.div
+              key="page-fuel"
+              custom={pageDirection}
+              variants={{
+                enter: (dir: number) => ({
+                  x: dir > 0 ? 60 : -60,
+                  opacity: 0,
+                }),
+                center: {
+                  x: 0,
+                  opacity: 1,
+                },
+                exit: (dir: number) => ({
+                  x: dir < 0 ? 60 : -60,
+                  opacity: 0,
+                }),
+              }}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{
+                x: { type: 'spring', stiffness: 220, damping: 28, mass: 0.8 },
+                opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+              }}
+              className="w-full"
+            >
+              <FuelPage
+                meals={meals}
+                onAddMeal={handleAddMeal}
+                onUpdateMeal={handleUpdateMeal}
+                onDeleteMeal={handleDeleteMeal}
+                onClearDayMeals={handleClearDayMeals}
+                baseCalorieGoal={baseCalorieGoal}
+                onUpdateBaseGoal={handleUpdateBaseGoal}
+                fuelData={fuelData}
+                onUpdateDayFuel={handleUpdateDayFuel}
+                showNotification={showNotification}
+                selectedDate={selectedFuelDate}
+                onSelectDate={setSelectedFuelDate}
+              />
+            </motion.div>
           )}
         </AnimatePresence>
+        )}
       </main>
 
-      {/* Floating Navigation Dock: Welcome (Workspace) -> Prompts -> Checklist (Tasks) -> Linha sutil -> Botão Criar (+) */}
+      {/* Floating Navigation Dock: Welcome (Workspace) -> Prompts -> Checklist (Tasks) -> Fuel (Flame) */}
       <nav
         id="floating-dock-nav"
         aria-label="Navegação de Páginas"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 p-1.5 rounded-xl bg-[#0e0e0e] border border-[#202025] shadow-[0_12px_40px_rgba(0,0,0,0.9)] backdrop-blur-md"
+        className="fixed bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 hidden sm:flex items-center gap-2 sm:gap-1.5 p-2 sm:p-1.5 rounded-2xl sm:rounded-xl bg-[#0e0e0e] border border-[#202025] shadow-[0_12px_40px_rgba(0,0,0,0.9)] backdrop-blur-md"
       >
         {/* Tab 1: Welcome / Workspace */}
         <button
           type="button"
           id="dock-tab-workspace"
           onClick={() => handleNavigate('workspace')}
-          className="relative p-2 rounded-lg cursor-pointer flex items-center justify-center select-none"
+          className="relative p-2.5 sm:p-2 rounded-xl sm:rounded-lg cursor-pointer flex items-center justify-center select-none"
           title="AI Agent / Chat"
         >
           {currentPage === 'workspace' && (
@@ -1849,11 +2046,11 @@ export default function App() {
                 layout: { type: 'spring', stiffness: 350, damping: 30 },
                 opacity: { duration: 0.6 },
               }}
-              className="absolute inset-0 bg-[#151518] border border-[#242429] rounded-lg shadow-sm pointer-events-none"
+              className="absolute inset-0 bg-[#151518] border border-[#242429] rounded-xl sm:rounded-lg shadow-sm pointer-events-none"
             />
           )}
           <MessageSquare
-            className={`relative z-10 w-4 h-4 transition-all duration-300 ${
+            className={`relative z-10 w-5 h-5 sm:w-4 sm:h-4 transition-all duration-300 ${
               currentPage === 'workspace'
                 ? 'text-white opacity-100'
                 : 'text-zinc-500 opacity-60 hover:text-zinc-300 hover:opacity-90'
@@ -1866,7 +2063,7 @@ export default function App() {
           type="button"
           id="dock-tab-prompts"
           onClick={() => handleNavigate('prompts')}
-          className="relative p-2 rounded-lg cursor-pointer flex items-center justify-center select-none"
+          className="relative p-2.5 sm:p-2 rounded-xl sm:rounded-lg cursor-pointer flex items-center justify-center select-none"
           title="Prompts"
         >
           {currentPage === 'prompts' && (
@@ -1877,11 +2074,11 @@ export default function App() {
                 layout: { type: 'spring', stiffness: 350, damping: 30 },
                 opacity: { duration: 0.6 },
               }}
-              className="absolute inset-0 bg-[#151518] border border-[#242429] rounded-lg shadow-sm pointer-events-none"
+              className="absolute inset-0 bg-[#151518] border border-[#242429] rounded-xl sm:rounded-lg shadow-sm pointer-events-none"
             />
           )}
           <FileText
-            className={`relative z-10 w-4 h-4 transition-all duration-300 ${
+            className={`relative z-10 w-5 h-5 sm:w-4 sm:h-4 transition-all duration-300 ${
               currentPage === 'prompts'
                 ? 'text-white opacity-100'
                 : 'text-zinc-500 opacity-60 hover:text-zinc-300 hover:opacity-90'
@@ -1894,7 +2091,7 @@ export default function App() {
           type="button"
           id="dock-tab-tasks"
           onClick={() => handleNavigate('tasks')}
-          className="relative p-2 rounded-lg cursor-pointer flex items-center justify-center select-none"
+          className="relative p-2.5 sm:p-2 rounded-xl sm:rounded-lg cursor-pointer flex items-center justify-center select-none"
           title="Checklist / Tarefas"
         >
           {currentPage === 'tasks' && (
@@ -1905,13 +2102,41 @@ export default function App() {
                 layout: { type: 'spring', stiffness: 350, damping: 30 },
                 opacity: { duration: 0.6 },
               }}
-              className="absolute inset-0 bg-[#151518] border border-[#242429] rounded-lg shadow-sm pointer-events-none"
+              className="absolute inset-0 bg-[#151518] border border-[#242429] rounded-xl sm:rounded-lg shadow-sm pointer-events-none"
             />
           )}
           <CheckSquare
-            className={`relative z-10 w-4 h-4 transition-all duration-300 ${
+            className={`relative z-10 w-5 h-5 sm:w-4 sm:h-4 transition-all duration-300 ${
               currentPage === 'tasks'
                 ? 'text-white opacity-100'
+                : 'text-zinc-500 opacity-60 hover:text-zinc-300 hover:opacity-90'
+            }`}
+          />
+        </button>
+
+        {/* Tab 4: Fuel / Calorie Counter (Fire icon) */}
+        <button
+          type="button"
+          id="dock-tab-fuel"
+          onClick={() => handleNavigate('fuel')}
+          className="relative p-2.5 sm:p-2 rounded-xl sm:rounded-lg cursor-pointer flex items-center justify-center select-none"
+          title="Consumo Diário"
+        >
+          {currentPage === 'fuel' && (
+            <motion.div
+              layoutId="dock-active-indicator"
+              animate={{ opacity: showDockIndicator ? 1 : 0 }}
+              transition={{
+                layout: { type: 'spring', stiffness: 350, damping: 30 },
+                opacity: { duration: 0.6 },
+              }}
+              className="absolute inset-0 bg-[#151518] border border-[#242429] rounded-xl sm:rounded-lg shadow-sm pointer-events-none"
+            />
+          )}
+          <Flame
+            className={`relative z-10 w-5 h-5 sm:w-4 sm:h-4 transition-all duration-300 ${
+              currentPage === 'fuel'
+                ? 'text-amber-400 opacity-100 fill-amber-400/20'
                 : 'text-zinc-500 opacity-60 hover:text-zinc-300 hover:opacity-90'
             }`}
           />

@@ -59,3 +59,25 @@ export interface TaskItem {
   completed?: boolean;
   taskType?: TaskCategoryType; // 'daily' (diária/pessoal) ou 'business' (negócios)
 }
+
+export interface MealItem {
+  id: string;
+  name: string; // Nome do prato / refeição (ex: Almoço, Shake de Proteína)
+  calories: number; // Quantidade de calorias (kcal)
+  date: string; // Formato YYYY-MM-DD
+  time?: string; // Horário opcional (ex: 12:30)
+  category?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  notes?: string;
+}
+
+export interface DayFuelData {
+  date: string; // YYYY-MM-DD
+  calorieGoal: number; // Meta base diária (ex: 1800 kcal)
+  waterMl?: number; // Consumo de água
+  waterGoalMl?: number; // Meta de água
+  steps?: number; // Passos dados
+  stepsGoal?: number; // Meta de passos
+  workoutDone?: boolean; // Treino de musculação realizado (-210 kcal)
+  cardioDone?: boolean; // Cardio realizado (-200 kcal)
+}
+

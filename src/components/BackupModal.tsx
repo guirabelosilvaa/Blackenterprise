@@ -19,7 +19,7 @@ import {
 interface BackupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  pageContext: 'workspace' | 'prompts' | 'tasks';
+  pageContext: 'workspace' | 'prompts' | 'tasks' | 'fuel';
   prompts: PromptItem[];
   tasks: TaskItem[];
   savedProjects?: string[];

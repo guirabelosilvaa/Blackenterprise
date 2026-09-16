@@ -83,7 +83,7 @@ export const WeekTaskbar: React.FC<WeekTaskbarProps> = ({
       initial="hidden"
       animate="visible"
       exit="exit"
-      className="flex items-center gap-1 sm:gap-1.5 p-1.5 rounded-full bg-[#0e0e0e] border border-[#202025] shadow-[0_8px_24px_rgba(0,0,0,0.85)] backdrop-blur-md overflow-x-auto"
+      className="flex items-center gap-1.5 sm:gap-1.5 p-2 sm:p-1.5 rounded-full bg-[#0e0e0e] border border-[#202025] shadow-[0_8px_24px_rgba(0,0,0,0.85)] backdrop-blur-md overflow-x-auto"
     >
       {days.map((day) => {
         const isSelected = selectedDate === day.iso;
@@ -95,7 +95,7 @@ export const WeekTaskbar: React.FC<WeekTaskbarProps> = ({
             variants={itemVariants}
             id={`week-day-${day.iso}`}
             onClick={() => onSelectDate(day.iso)}
-            className={`relative w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors duration-200 cursor-pointer flex items-center justify-center select-none text-xs sm:text-sm ${
+            className={`relative w-9 h-9 sm:w-9 sm:h-9 rounded-full transition-colors duration-200 cursor-pointer flex items-center justify-center select-none text-sm ${
               isSelected
                 ? 'text-white font-bold'
                 : 'text-zinc-500 hover:text-zinc-300 font-medium'
@@ -125,7 +125,7 @@ export const WeekTaskbar: React.FC<WeekTaskbarProps> = ({
         variants={itemVariants}
         id="week-day-all-tasks"
         onClick={() => onSelectDate('all')}
-        className={`relative w-8 h-8 sm:w-9 sm:h-9 rounded-full transition-colors duration-200 cursor-pointer flex items-center justify-center select-none ${
+        className={`relative w-9 h-9 sm:w-9 sm:h-9 rounded-full transition-colors duration-200 cursor-pointer flex items-center justify-center select-none ${
           isAllSelected
             ? 'text-white font-bold'
             : 'text-zinc-500 hover:text-zinc-300 font-medium'
@@ -141,7 +141,7 @@ export const WeekTaskbar: React.FC<WeekTaskbarProps> = ({
             className="absolute inset-0 rounded-full bg-[#1a1a1f] border border-[#30303a] shadow-sm pointer-events-none"
           />
         )}
-        <Menu className="relative z-10 w-3.5 h-3.5 stroke-[2.2]" />
+        <Menu className="relative z-10 w-4 h-4 sm:w-3.5 sm:h-3.5 stroke-[2.2]" />
       </motion.button>
     </motion.nav>
   );
