@@ -49,6 +49,12 @@ export interface PromptItem {
 
 export type TaskCategoryType = 'daily' | 'business';
 
+export interface SubtaskItem {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 export interface TaskItem {
   id: string;
   title: string; // Nome da Tarefa
@@ -58,6 +64,8 @@ export interface TaskItem {
   time?: string; // Horário opcional para tarefas diárias (ex: "14:00")
   completed?: boolean;
   taskType?: TaskCategoryType; // 'daily' (diária/pessoal) ou 'business' (negócios)
+  urgent?: boolean; // Tarefa urgente (foguinho vermelho)
+  subtasks?: SubtaskItem[]; // Subtarefas (apenas tarefas black / business)
 }
 
 export interface MealItem {

@@ -6,6 +6,7 @@ import { PromptModal } from './components/PromptModal';
 import { NewPromptModal } from './components/NewPromptModal';
 import { TaskCard } from './components/TaskCard';
 import { NewTaskModal } from './components/NewTaskModal';
+import { SubtasksModal } from './components/SubtasksModal';
 import { WeekTaskbar } from './components/WeekTaskbar';
 import { BackupModal } from './components/BackupModal';
 import { FuelPage } from './components/FuelPage';
@@ -32,6 +33,7 @@ import {
   Check,
   Flame,
   Share2,
+  Eye,
 } from 'lucide-react';
 
 const PROMPTS_STORAGE_KEY = 'promptvault_user_prompts_v3';
@@ -439,6 +441,95 @@ export default function App() {
     showNotification('Tarefa colocada no dia de hoje!');
   };
 
+  // Toggle urgent status for a task
+  const handleToggleUrgentTask = (id: string) => {
+    setTasks((prevTasks) => {
+      const updated = prevTasks.map((t) => (t.id === id ? { ...t, urgent: !t.urgent } : t));
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Subtask handlers: add, toggle, delete
+  const handleAddSubtask = (taskId: string, title: string) => {
+    setTasks((prevTasks) => {
+      const updated = prevTasks.map((t) => {
+        if (t.id === taskId) {
+          const currentSubtasks = t.subtasks || [];
+          const newSub = {
+            id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            title,
+            completed: false,
+          };
+          return { ...t, subtasks: [...currentSubtasks, newSub] };
+        }
+        return t;
+      });
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleToggleSubtask = (taskId: string, subtaskId: string) => {
+    setTasks((prevTasks) => {
+      const updated = prevTasks.map((t) => {
+        if (t.id === taskId && t.subtasks) {
+          const updatedSubtasks = t.subtasks.map((s) =>
+            s.id === subtaskId ? { ...s, completed: !s.completed } : s
+          );
+          const allCompleted =
+            updatedSubtasks.length > 0 && updatedSubtasks.every((s) => s.completed);
+          return {
+            ...t,
+            subtasks: updatedSubtasks,
+            completed: allCompleted ? true : t.completed,
+          };
+        }
+        return t;
+      });
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleDeleteSubtask = (taskId: string, subtaskId: string) => {
+    setTasks((prevTasks) => {
+      const updated = prevTasks.map((t) => {
+        if (t.id === taskId && t.subtasks) {
+          const updatedSubtasks = t.subtasks.filter((s) => s.id !== subtaskId);
+          return { ...t, subtasks: updatedSubtasks };
+        }
+        return t;
+      });
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Hide completed tasks toggle state
+  const [hideCompletedTasks, setHideCompletedTasks] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('promptvault_hide_completed_tasks') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleHideCompleted = () => {
+    setHideCompletedTasks((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('promptvault_hide_completed_tasks', String(next));
+      } catch {
+        // Fallback
+      }
+      return next;
+    });
+  };
+
+  // Agent urgent task toggle state
+  const [agentIsUrgent, setAgentIsUrgent] = useState<boolean>(false);
+
   // Prompts State
   const [prompts, setPrompts] = useState<PromptItem[]>(() => {
     try {
@@ -510,6 +601,13 @@ export default function App() {
       return pruned;
     });
   }, []);
+
+  // Subtask popup modal state
+  const [activeSubtaskTaskId, setActiveSubtaskTaskId] = useState<string | null>(null);
+  const activeSubtaskTask = useMemo(
+    () => tasks.find((t) => t.id === activeSubtaskTaskId) || null,
+    [tasks, activeSubtaskTaskId]
+  );
 
   const isTasks = currentPage === 'tasks';
   const isPrompts = currentPage === 'prompts';
@@ -838,6 +936,7 @@ export default function App() {
       project: taskProject,
       date: taskDate,
       notes,
+      urgent: agentIsUrgent,
       completed: false,
     };
 
@@ -859,6 +958,7 @@ export default function App() {
 
     setAgentPrompt('');
     setAgentSelectedProject(null);
+    setAgentIsUrgent(false);
   };
 
   // --- Prompts Handlers ---
@@ -980,9 +1080,21 @@ export default function App() {
         updated = imported;
       }
     } else {
+      const importedMap = new Map(imported.map((t) => [t.id, t]));
       const existingIds = new Set(tasks.map((t) => t.id));
+      const updatedExisting = tasks.map((t) => {
+        const matching = importedMap.get(t.id);
+        if (matching) {
+          return {
+            ...t,
+            ...matching,
+            subtasks: matching.subtasks !== undefined ? matching.subtasks : t.subtasks,
+          };
+        }
+        return t;
+      });
       const newItems = imported.filter((item) => !existingIds.has(item.id));
-      updated = [...newItems, ...tasks];
+      updated = [...newItems, ...updatedExisting];
     }
     saveTasks(updated);
     showNotification(`${imported.length} tarefas sincronizadas!`);
@@ -1013,9 +1125,21 @@ export default function App() {
         updatedTasks = importedTasks;
       }
     } else {
+      const importedMap = new Map(importedTasks.map((t) => [t.id, t]));
       const existingIds = new Set(tasks.map((t) => t.id));
+      const updatedExisting = tasks.map((t) => {
+        const matching = importedMap.get(t.id);
+        if (matching) {
+          return {
+            ...t,
+            ...matching,
+            subtasks: matching.subtasks !== undefined ? matching.subtasks : t.subtasks,
+          };
+        }
+        return t;
+      });
       const newItems = importedTasks.filter((item) => !existingIds.has(item.id));
-      updatedTasks = [...newItems, ...tasks];
+      updatedTasks = [...newItems, ...updatedExisting];
     }
     saveTasks(updatedTasks);
 
@@ -1166,7 +1290,19 @@ export default function App() {
     }
   };
 
-  // Filtered tasks (filtered by taskCategory and date; completed tasks descend to bottom automatically)
+  // Contagem de tarefas ativas por projeto para exibir no seletor de projetos
+  const projectTaskCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tasks.forEach((t) => {
+      if ((t.taskType || 'business') === 'business' && t.project && t.project.trim() !== '') {
+        const projName = t.project.trim();
+        counts[projName] = (counts[projName] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [tasks]);
+
+  // Filtered tasks (filtered by taskCategory and date; urgent tasks first; hideCompleted filter)
   const filteredTasks = useMemo(() => {
     const list = tasks.filter((item) => {
       const matchesCategory = (item.taskType || 'business') === taskCategory;
@@ -1186,15 +1322,27 @@ export default function App() {
         (item.project && item.project.toLowerCase().includes(q)) ||
         (item.taskType === 'daily' && 'daily'.includes(q));
 
+      // Se o olho para ocultar tarefas com check estiver ativo, oculta
+      if (hideCompletedTasks && item.completed) {
+        return false;
+      }
+
       return matchesCategory && matchesDate && matchesProject && matchesSearch;
     });
 
-    // Sort: incomplete tasks first, completed tasks move to the bottom
+    // Sort:
+    // 1. Incompletas primeiro, completadas no final
+    // 2. Tarefas com fogo (urgentes) vêm em primeiro lugar!
     return [...list].sort((a, b) => {
-      if (!!a.completed === !!b.completed) return 0;
-      return a.completed ? 1 : -1;
+      if (!!a.completed !== !!b.completed) {
+        return a.completed ? 1 : -1;
+      }
+      if (!!a.urgent !== !!b.urgent) {
+        return a.urgent ? -1 : 1;
+      }
+      return 0;
     });
-  }, [tasks, selectedTaskDate, taskCategory, searchQuery, activeProjectFilter]);
+  }, [tasks, selectedTaskDate, taskCategory, searchQuery, activeProjectFilter, hideCompletedTasks]);
 
   return (
     <div className="min-h-screen bg-[#0e0e0e] text-[#ececec] flex flex-col selection:bg-[#333338] selection:text-white font-sans antialiased overflow-x-hidden">
@@ -1365,103 +1513,186 @@ export default function App() {
                   </>
                 )}
               </>
-            ) : isTasks && taskCategory === 'business' ? (
-              /* Seletor de Projetos no Header da página de Tarefas (apenas na view Black / Negócios, oculto nas Diárias) */
-              <div
-                ref={projectDropdownRef}
-                className="relative"
-                onMouseEnter={() => setIsProjectDropdownOpen(true)}
-              >
+            ) : isTasks ? (
+              /* Seletor de Categorias de Tarefas (Projects vs Daily) sem quadrado englobando os dois */
+              <div className="flex items-center gap-1">
+                {/* Projects Tab com Dropdown */}
+                <div
+                  ref={projectDropdownRef}
+                  className="relative"
+                  onMouseEnter={() => {
+                    if (taskCategory === 'business') {
+                      setIsProjectDropdownOpen(true);
+                    }
+                  }}
+                >
+                  <button
+                    type="button"
+                    id="tasks-category-btn-projects"
+                    onClick={() => {
+                      if (taskCategory !== 'business') {
+                        setTaskCategory('business');
+                        try {
+                          localStorage.setItem(TASK_TYPE_STORAGE_KEY, 'business');
+                        } catch {
+                          // Fallback
+                        }
+                      } else {
+                        setIsProjectDropdownOpen((prev) => !prev);
+                      }
+                    }}
+                    className={`relative isolate flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer select-none ${
+                      taskCategory === 'business'
+                        ? 'text-white font-semibold'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                    title="Tarefas de Projetos (Black)"
+                  >
+                    {taskCategory === 'business' && (
+                      <motion.div
+                        layoutId="tasks-category-active-slide"
+                        transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                        className="absolute inset-0 bg-[#202026]/30 border border-[#484856]/20 rounded-lg shadow-sm z-0 pointer-events-none"
+                      />
+                    )}
+                    <span className="relative z-10 truncate max-w-[130px]">
+                      {activeProjectFilter || 'Projects'}
+                    </span>
+                  </button>
+
+                  {/* Dropdown Menu com lista vertical de projetos e número de tarefas à direita */}
+                  <AnimatePresence>
+                    {isProjectDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 4, scale: 0.96 }}
+                        transition={{ duration: 0.16, ease: 'easeOut' }}
+                        className="absolute top-full left-0 mt-1.5 z-50 min-w-[210px] p-1.5 rounded-xl bg-[#0e0e11] border border-[#24242c] shadow-[0_16px_36px_rgba(0,0,0,0.95)] backdrop-blur-md"
+                      >
+                        {/* Opção Todos os projetos no topo (sem número de contagem) */}
+                        <button
+                          type="button"
+                          id="tasks-project-option-all"
+                          onClick={() => {
+                            setTaskCategory('business');
+                            setActiveProjectFilter(null);
+                            setIsProjectDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer text-left ${
+                            activeProjectFilter === null && taskCategory === 'business'
+                              ? 'bg-zinc-800/90 text-white font-semibold'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#18181f]'
+                          }`}
+                        >
+                          <span className="truncate">Todos os projetos</span>
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            {activeProjectFilter === null && taskCategory === 'business' && (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
+                            )}
+                          </div>
+                        </button>
+
+                        {/* Linha separadora */}
+                        {savedProjects.length > 0 && (
+                          <div className="w-full h-[1px] bg-[#22222a] my-1" />
+                        )}
+
+                        {/* Lista dos projetos cadastrados (número sem círculo de background) */}
+                        <div className="flex flex-col gap-0.5 max-h-60 overflow-y-auto pr-0.5">
+                          {savedProjects.map((proj) => {
+                            const isSelected = activeProjectFilter === proj && taskCategory === 'business';
+                            const count = projectTaskCounts[proj] || 0;
+                            return (
+                              <button
+                                key={proj}
+                                type="button"
+                                id={`tasks-proj-option-${proj.toLowerCase().replace(/\s+/g, '-')}`}
+                                onClick={() => {
+                                  setTaskCategory('business');
+                                  setActiveProjectFilter(proj);
+                                  setIsProjectDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer text-left ${
+                                  isSelected
+                                    ? 'bg-zinc-800/90 text-white font-semibold'
+                                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#18181f]'
+                                }`}
+                              >
+                                <span className="truncate pr-2">{proj}</span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="text-xs font-mono text-zinc-500">
+                                    {count}
+                                  </span>
+                                  {isSelected && (
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Daily Tab */}
                 <button
                   type="button"
-                  id="tasks-project-dropdown-trigger"
-                  onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
-                  className={`relative isolate flex items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer select-none shrink-0 border ${
-                    activeProjectFilter
-                      ? 'bg-[#202026] border-[#484856] text-white font-semibold shadow-sm'
-                      : 'bg-[#141418] border-[#272730] hover:border-[#383844] text-zinc-300 hover:text-white shadow-sm'
+                  id="tasks-category-btn-daily"
+                  onClick={() => {
+                    setTaskCategory('daily');
+                    setActiveProjectFilter(null);
+                    setIsProjectDropdownOpen(false);
+                    try {
+                      localStorage.setItem(TASK_TYPE_STORAGE_KEY, 'daily');
+                    } catch {
+                      // Fallback
+                    }
+                  }}
+                  className={`relative isolate flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer select-none ${
+                    taskCategory === 'daily'
+                      ? 'text-white font-semibold'
+                      : 'text-zinc-400 hover:text-zinc-200'
                   }`}
-                  title="Filtrar por projeto"
+                  title="Tarefas Diárias"
                 >
-                  <span className="relative z-10 truncate max-w-[140px]">
-                    {activeProjectFilter || 'Projetos'}
-                  </span>
-                </button>
-
-                {/* Dropdown Menu com lista vertical de projetos */}
-                <AnimatePresence>
-                  {isProjectDropdownOpen && (
+                  {taskCategory === 'daily' && (
                     <motion.div
-                      initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                      transition={{ duration: 0.16, ease: 'easeOut' }}
-                      className="absolute top-full left-0 mt-1.5 z-50 min-w-[200px] p-1.5 rounded-xl bg-[#0e0e11] border border-[#24242c] shadow-[0_16px_36px_rgba(0,0,0,0.95)] backdrop-blur-md"
-                    >
-                      {/* Opção Todos os projetos no topo */}
-                      <button
-                        type="button"
-                        id="tasks-project-option-all"
-                        onClick={() => {
-                          setActiveProjectFilter(null);
-                          setIsProjectDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer text-left ${
-                          activeProjectFilter === null
-                            ? 'bg-zinc-800/90 text-white font-semibold'
-                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#18181f]'
-                        }`}
-                      >
-                        <span>Todos os projetos</span>
-                        {activeProjectFilter === null && (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300" />
-                        )}
-                      </button>
-
-                      {/* Linha separadora */}
-                      {savedProjects.length > 0 && (
-                        <div className="w-full h-[1px] bg-[#22222a] my-1" />
-                      )}
-
-                      {/* Lista dos projetos cadastrados */}
-                      <div className="flex flex-col gap-0.5 max-h-60 overflow-y-auto pr-0.5">
-                        {savedProjects.map((proj) => {
-                          const isSelected = activeProjectFilter === proj;
-                          return (
-                            <button
-                              key={proj}
-                              type="button"
-                              id={`tasks-proj-option-${proj.toLowerCase().replace(/\s+/g, '-')}`}
-                              onClick={() => {
-                                setActiveProjectFilter(proj);
-                                setIsProjectDropdownOpen(false);
-                              }}
-                              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer text-left ${
-                                isSelected
-                                  ? 'bg-zinc-800/90 text-white font-semibold'
-                                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#18181f]'
-                              }`}
-                            >
-                              <span className="truncate pr-2">{proj}</span>
-                              {isSelected && (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
+                      layoutId="tasks-category-active-slide"
+                      transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                      className="absolute inset-0 bg-[#202026]/30 border border-[#484856]/20 rounded-lg shadow-sm z-0 pointer-events-none"
+                    />
                   )}
-                </AnimatePresence>
+                  <span className="relative z-10">Daily</span>
+                </button>
               </div>
             ) : (
-              /* Tasks Daily & Workspace header left: completely empty / clean */
+              /* Workspace header left: completely empty / clean */
               <div className="h-6" />
             )}
           </div>
 
-          {/* Right Actions: Nuvem (apenas em calories), WhatsApp Share, Wipe Data */}
+          {/* Right Actions: Olho (ocultar checks), Botão (+), Nuvem, WhatsApp Share, Wipe Data */}
           <div className="flex items-center gap-2.5">
+            {/* Símbolo de Olho: Ao lado esquerdo do botão +, sem quadrado envolta, opacidade baixa quando oculto */}
+            {isTasks && !isMobile && (
+              <button
+                id="btn-tasks-hide-completed"
+                type="button"
+                onClick={handleToggleHideCompleted}
+                className={`p-1.5 transition-all duration-200 cursor-pointer shrink-0 ${
+                  hideCompletedTasks
+                    ? 'opacity-30 hover:opacity-60 text-zinc-400'
+                    : 'opacity-100 text-zinc-400 hover:text-white'
+                }`}
+                title={hideCompletedTasks ? 'Mostrar tarefas com check' : 'Ocultar tarefas com check'}
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+            )}
+
             {/* Create Button (+): on Prompts and Tasks, on desktop only */}
             {!isWorkspace && !isFuel && !isMobile && (
               <button
@@ -1476,7 +1707,7 @@ export default function App() {
             )}
 
             {/* Símbolo de Nuvem: Presente em Welcome, Prompt e Tarefas (não em Calories) */}
-            {!isFuel && !isMobile && (
+            {!isFuel && (
               <button
                 id="btn-cloud-backup"
                 type="button"
@@ -1489,7 +1720,7 @@ export default function App() {
             )}
 
             {/* Símbolo de Compartilhar: Presente apenas na página de Calories */}
-            {(isFuel || isMobile) && (
+            {isFuel && (
               <button
                 id="btn-whatsapp-share-header"
                 type="button"
@@ -1666,8 +1897,23 @@ export default function App() {
                     className="relative z-10 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-0 resize-none p-4 sm:p-5 pr-28 leading-relaxed font-sans"
                   />
 
-                  {/* Canto direito: efeito degradê + blur com botão de calendário e seta para cima */}
-                  <div className="absolute right-3 bottom-3 z-20 flex items-center gap-2 pl-3 pr-1 py-1 rounded-full bg-gradient-to-l from-[#141416] via-[#141416]/90 to-transparent backdrop-blur-md">
+                  {/* Canto direito: efeito degradê + blur com botão de foguinho (urgente), calendário e seta para cima */}
+                  <div className="absolute right-3 bottom-3 z-20 flex items-center gap-1.5 pl-3 pr-1 py-1 rounded-full bg-gradient-to-l from-[#141416] via-[#141416]/90 to-transparent backdrop-blur-md">
+                    {/* Botão de Tarefa Urgente (Foguinho ao lado do calendário) */}
+                    <button
+                      type="button"
+                      id="btn-agent-urgent"
+                      onClick={() => setAgentIsUrgent((prev) => !prev)}
+                      className={`relative overflow-hidden w-8 h-8 rounded-full border transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 ${
+                        agentIsUrgent
+                          ? 'bg-red-950/60 border-red-500 text-red-500 shadow-[0_0_12px_rgba(239,68,68,0.4)]'
+                          : 'opacity-50 hover:opacity-85 bg-[#0e0e0e] border-[#202025] hover:border-[#383844] text-zinc-400 hover:text-red-400'
+                      }`}
+                      title={agentIsUrgent ? 'Tarefa urgente ativa (ficará vermelha e no topo)' : 'Marcar como urgente (ficará no topo)'}
+                    >
+                      <Flame className={`w-3.5 h-3.5 ${agentIsUrgent ? 'text-red-500 fill-red-500/30' : ''}`} />
+                    </button>
+
                     {/* Botão de Calendário: opacidade 89% sem brilho quando selecionado, exibindo apenas o dia */}
                     <div className="relative flex items-center">
                       <button
@@ -1717,19 +1963,24 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* Seta para cima: vira check com animação quando tarefa for adicionada */}
+                    {/* Seta para cima: vira check branco e botão adota a cor do box da tarefa ao adicionar */}
                     <button
                       type="submit"
                       id="btn-ai-agent-submit"
-                      className="relative overflow-hidden w-8 h-8 rounded-full bg-white text-black transition-all duration-200 shadow-[0_0_16px_rgba(255,255,255,0.45)] cursor-pointer flex items-center justify-center shrink-0 active:scale-95 group/arrow"
+                      className={`relative overflow-hidden w-8 h-8 rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center shrink-0 active:scale-95 group/arrow ${
+                        isAgentSuccess
+                          ? 'bg-[#141416] border border-zinc-700 text-white shadow-[0_0_14px_rgba(255,255,255,0.15)]'
+                          : 'bg-white text-black shadow-[0_0_16px_rgba(255,255,255,0.45)]'
+                      }`}
                       title={isAgentSuccess ? 'Tarefa adicionada!' : 'Enviar tarefa para o AI Agent'}
                     >
-                      {/* Flashlight sheen layer sempre ativa */}
+                      {/* Flashlight sheen layer */}
                       <div
                         className="flashlight-layer absolute inset-0 rounded-full pointer-events-none"
                         style={{
-                          background:
-                            'radial-gradient(34px circle at 38% 32%, rgba(255, 255, 255, 1) 0%, rgba(220, 220, 230, 0.55) 55%, transparent 88%)',
+                          background: isAgentSuccess
+                            ? 'radial-gradient(34px circle at 38% 32%, rgba(255, 255, 255, 0.25) 0%, transparent 88%)'
+                            : 'radial-gradient(34px circle at 38% 32%, rgba(255, 255, 255, 1) 0%, rgba(220, 220, 230, 0.55) 55%, transparent 88%)',
                         }}
                       />
 
@@ -1743,7 +1994,7 @@ export default function App() {
                               exit={{ opacity: 0, scale: 0.7 }}
                               transition={{ duration: 0.15 }}
                             >
-                              <RotateCcw className="w-3.5 h-3.5 text-black animate-spin" />
+                              <RotateCcw className="w-3.5 h-3.5 text-zinc-300 animate-spin" />
                             </motion.span>
                           ) : isAgentSuccess ? (
                             <motion.span
@@ -1753,7 +2004,7 @@ export default function App() {
                               exit={{ opacity: 0, scale: 0.3, rotate: 25 }}
                               transition={{ type: 'spring', stiffness: 500, damping: 20 }}
                             >
-                              <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
+                              <Check className="w-4 h-4 text-white stroke-[2.5]" />
                             </motion.span>
                           ) : (
                             <motion.span
@@ -1913,26 +2164,10 @@ export default function App() {
               }}
               className="w-full flex flex-col items-center"
             >
-              {/* Barra de Tarefas: Ícone de Usuário/Empresa na esquerda, Calendário no meio, Voltar Check na direita */}
+              {/* Barra de Tarefas: Calendário no meio, Voltar Check na direita */}
               <div className="w-full max-w-2xl mx-auto flex items-center justify-between mb-5 px-1">
-                {/* Lado Esquerdo: Alternador Usuário vs Empresa (Empresa é o padrão, mesma cor zinc-300 para ambos) */}
-                <button
-                  type="button"
-                  id="btn-toggle-task-category"
-                  onClick={handleToggleTaskCategory}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#0e0e0e] border border-[#202025] hover:border-[#383844] hover:bg-[#18181d] text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.6)] shrink-0"
-                  title={
-                    taskCategory === 'business'
-                      ? 'Tarefas Black (ativo) — clique para alternar para Tarefas Diárias'
-                      : 'Tarefas Diárias (ativo) — clique para alternar para Tarefas Black'
-                  }
-                >
-                  {taskCategory === 'business' ? (
-                    <Briefcase className="w-3.5 h-3.5 text-zinc-300" />
-                  ) : (
-                    <User className="w-3.5 h-3.5 text-zinc-300" />
-                  )}
-                </button>
+                {/* Lado Esquerdo: Espaçador equilibrado */}
+                <div className="w-8 sm:w-9 shrink-0" />
 
                 {/* Meio: Calendário centralizado apenas na view Black (Negócios); nas tarefas diárias NÃO há datas */}
                 <div className="flex-1 flex justify-center px-2 min-h-[44px] items-center">
@@ -1994,6 +2229,11 @@ export default function App() {
                           onEdit={handleOpenEditTask}
                           onToggleComplete={handleToggleCompleteTask}
                           onMoveToToday={handleMoveTaskToToday}
+                          onToggleUrgent={handleToggleUrgentTask}
+                          onOpenSubtasks={(t) => setActiveSubtaskTaskId(t.id)}
+                          onAddSubtask={handleAddSubtask}
+                          onToggleSubtask={handleToggleSubtask}
+                          onDeleteSubtask={handleDeleteSubtask}
                           isHovered={hoveredCardId === task.id}
                           isAnyHovered={hoveredCardId !== null}
                           onMouseEnter={() => setHoveredCardId(task.id)}
@@ -2228,6 +2468,16 @@ export default function App() {
         }}
         onSave={handleSaveTask}
         onDelete={handleDeleteTask}
+      />
+
+      {/* Subtasks Modal (Triggered by clicking x/x on Black tasks) */}
+      <SubtasksModal
+        isOpen={activeSubtaskTaskId !== null}
+        task={activeSubtaskTask}
+        onClose={() => setActiveSubtaskTaskId(null)}
+        onToggleSubtask={handleToggleSubtask}
+        onAddSubtask={handleAddSubtask}
+        onDeleteSubtask={handleDeleteSubtask}
       />
 
       {/* Cloud Backup / Restore Modal (Supports prompts, tasks, projects, workflows and calories) */}

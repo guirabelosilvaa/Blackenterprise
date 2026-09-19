@@ -4,13 +4,12 @@ import {
   Calendar as CalendarIcon,
   X,
   Clock,
-  Dumbbell,
-  Activity,
   Share2,
   RotateCcw,
   ChevronRight,
   Trash2,
   Check,
+  Plus,
 } from 'lucide-react';
 import { MealItem, DayFuelData } from '../types';
 
@@ -37,20 +36,22 @@ const getTodayIso = () => {
   return `${year}-${month}-${day}`;
 };
 
-const getDayOfWeekName = (dateStr: string) => {
+const getDayOfWeekShort = (dateStr: string) => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const d = new Date(year, month - 1, day);
   const days = [
     'Domingo',
-    'Segunda-feira',
-    'Terça-feira',
-    'Quarta-feira',
-    'Quinta-feira',
-    'Sexta-feira',
+    'Segunda',
+    'Terça',
+    'Quarta',
+    'Quinta',
+    'Sexta',
     'Sábado',
   ];
-  return days[d.getDay()] || 'Dia';
+  return days[d.getDay()] || '';
 };
+
+const getDayOfWeekName = getDayOfWeekShort;
 
 const formatDateShort = (dateStr: string) => {
   const parts = dateStr.split('-');
@@ -58,6 +59,12 @@ const formatDateShort = (dateStr: string) => {
     return `${parts[2]}/${parts[1]}`;
   }
   return dateStr;
+};
+
+const formatDateWithDay = (dateStr: string) => {
+  const shortDate = formatDateShort(dateStr);
+  const dayName = getDayOfWeekShort(dateStr);
+  return `${shortDate} . ${dayName}`;
 };
 
 // Formatação inteligente de calorias:
@@ -208,42 +215,44 @@ export const FuelPage: React.FC<FuelPageProps> = ({
   // Net calories with activity discount
   const netCalories = Math.max(0, consumedCalories - totalBurned);
   const deficit = baseCalorieGoal - netCalories;
+  const percentage = baseCalorieGoal > 0 ? Math.round((netCalories / baseCalorieGoal) * 100) : 0;
 
   // Status visual ao lado de Calories com fonte fina:
   // Ok! Good! Excelent! Max! e se passar Stop!
+  // Tons levemente escurecidos com efeito blur/glow sutil emanando deles
   const statusConfig = useMemo(() => {
     if (netCalories > baseCalorieGoal) {
       return {
         word: 'Stop!',
-        color: '#ef4444', // red
-        glow: 'rgba(239, 68, 68, 0.55)',
+        color: '#dc2626', // slightly darker rich red
+        glow: 'rgba(220, 38, 38, 0.5)',
       };
     }
     if (netCalories > 1750) {
       return {
         word: 'Max!',
-        color: '#f97316', // orange
-        glow: 'rgba(249, 115, 22, 0.5)',
+        color: '#ea580c', // slightly darker rich orange
+        glow: 'rgba(234, 88, 12, 0.48)',
       };
     }
     if (netCalories >= 1200) {
       return {
         word: 'Excelent!',
-        color: '#38bdf8', // blue / sky
-        glow: 'rgba(56, 189, 248, 0.45)',
+        color: '#0284c7', // slightly darker rich azure/blue
+        glow: 'rgba(2, 132, 199, 0.45)',
       };
     }
     if (netCalories >= 600) {
       return {
         word: 'Good!',
-        color: '#22c55e', // green
-        glow: 'rgba(34, 197, 94, 0.45)',
+        color: '#16a34a', // slightly darker rich emerald/green
+        glow: 'rgba(22, 163, 74, 0.45)',
       };
     }
     return {
       word: 'Ok!',
-      color: '#ffffff', // white
-      glow: 'rgba(255, 255, 255, 0.4)',
+      color: '#e4e4e7', // white / light zinc
+      glow: 'rgba(228, 228, 231, 0.35)',
     };
   }, [netCalories, baseCalorieGoal]);
 
@@ -414,473 +423,359 @@ export const FuelPage: React.FC<FuelPageProps> = ({
 
   return (
     <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 animate-in fade-in duration-300">
-      {/* ========================================================================= */}
       {/* 1. TOP MAIN CARD: Clicável para Adicionar Refeição (Efeitos do PromptCard) */}
-      {/* ========================================================================= */}
-      <div
-        ref={mainCard.ref}
-        onClick={handleOpenAddMeal}
-        onMouseMove={mainCard.handleMouseMove}
-        onMouseEnter={mainCard.handleMouseEnter}
-        onMouseLeave={mainCard.handleMouseLeave}
-        style={{
-          transform: mainCard.mouseCoords.isInteracting
-            ? `perspective(1000px) rotateX(${mainCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${mainCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.008, 1.008, 1.008)`
-            : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
-          transition: mainCard.mouseCoords.isInteracting
-            ? 'transform 0.08s ease-out'
-            : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
-        }}
-        className="group relative w-full rounded-[28px] sm:rounded-[32px] bg-[#141416] border border-[#222226] hover:border-[#383842] p-6 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.7)] hover:shadow-[0_16px_48px_rgba(0,0,0,0.85),0_0_25px_rgba(255,255,255,0.04)] transition-all duration-300 overflow-hidden cursor-pointer active:scale-[0.995] select-none preserve-3d"
-        title="Toque para adicionar uma refeição"
-      >
-        {/* Flashlight Border Glow (Monochromatic) */}
-        <div
-          className="flashlight-layer absolute inset-0 rounded-[28px] sm:rounded-[32px] p-[1px] pointer-events-none z-10"
-          style={{
-            opacity: mainCard.mouseCoords.isInteracting ? 1 : 0,
-            background: mainCard.mouseCoords.isInteracting
-              ? `radial-gradient(340px circle at ${mainCard.mouseCoords.x}px ${mainCard.mouseCoords.y}px, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.05) 45%, transparent 75%)`
-              : 'none',
-            WebkitMask:
-              'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-            WebkitMaskComposite: 'xor',
-            maskComposite: 'exclude',
-          }}
-        />
+          <div
+            ref={mainCard.ref}
+            onClick={handleOpenAddMeal}
+            onMouseMove={mainCard.handleMouseMove}
+            onMouseEnter={mainCard.handleMouseEnter}
+            onMouseLeave={mainCard.handleMouseLeave}
+            style={{
+              transform: mainCard.mouseCoords.isInteracting
+                ? `perspective(1000px) rotateX(${mainCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${mainCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.008, 1.008, 1.008)`
+                : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
+              transition: mainCard.mouseCoords.isInteracting
+                ? 'transform 0.08s ease-out'
+                : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
+            }}
+            className="group relative w-full rounded-[28px] sm:rounded-[32px] bg-[#141416] border border-[#222226] hover:border-[#383842] p-6 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.7)] hover:shadow-[0_16px_48px_rgba(0,0,0,0.85),0_0_25px_rgba(255,255,255,0.04)] transition-all duration-300 overflow-hidden cursor-pointer active:scale-[0.995] select-none preserve-3d"
+            title="Toque para adicionar uma refeição"
+          >
+            {/* Flashlight Border Glow (Monochromatic) */}
+            <div
+              className="flashlight-layer absolute inset-0 rounded-[28px] sm:rounded-[32px] p-[1px] pointer-events-none z-10"
+              style={{
+                opacity: mainCard.mouseCoords.isInteracting ? 1 : 0,
+                background: mainCard.mouseCoords.isInteracting
+                  ? `radial-gradient(340px circle at ${mainCard.mouseCoords.x}px ${mainCard.mouseCoords.y}px, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.05) 45%, transparent 75%)`
+                  : 'none',
+                WebkitMask:
+                  'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                WebkitMaskComposite: 'xor',
+                maskComposite: 'exclude',
+              }}
+            />
 
-        {/* Ambient flashlight surface glow */}
-        <div
-          className="flashlight-layer absolute inset-0 pointer-events-none rounded-[28px] sm:rounded-[32px] z-0 transition-opacity duration-300"
-          style={{
-            opacity: mainCard.mouseCoords.isInteracting ? 1 : 0,
-            background: mainCard.mouseCoords.isInteracting
-              ? `radial-gradient(400px circle at ${mainCard.mouseCoords.x}px ${mainCard.mouseCoords.y}px, rgba(255, 255, 255, 0.04), transparent 75%)`
-              : 'none',
-          }}
-        />
+            {/* Ambient flashlight surface glow */}
+            <div
+              className="flashlight-layer absolute inset-0 pointer-events-none rounded-[28px] sm:rounded-[32px] z-0 transition-opacity duration-300"
+              style={{
+                opacity: mainCard.mouseCoords.isInteracting ? 1 : 0,
+                background: mainCard.mouseCoords.isInteracting
+                  ? `radial-gradient(400px circle at ${mainCard.mouseCoords.x}px ${mainCard.mouseCoords.y}px, rgba(255, 255, 255, 0.04), transparent 75%)`
+                  : 'none',
+              }}
+            />
 
-        {/* Subtle monochromatic reflection */}
-        <div
-          className="holographic-foil absolute inset-0 pointer-events-none rounded-[28px] sm:rounded-[32px] z-20 pointer-events-none"
-          style={{
-            opacity: mainCard.mouseCoords.isInteracting ? 0.18 : 0,
-            background: `linear-gradient(${115 + mainCard.mouseCoords.rotateY * 2}deg, transparent 35%, rgba(255,255,255,0.08) 50%, transparent 65%)`,
-            transition: 'opacity 0.25s ease-out',
-          }}
-        />
+            {/* Subtle monochromatic reflection */}
+            <div
+              className="holographic-foil absolute inset-0 pointer-events-none rounded-[28px] sm:rounded-[32px] z-20 pointer-events-none"
+              style={{
+                opacity: mainCard.mouseCoords.isInteracting ? 0.18 : 0,
+                background: `linear-gradient(${115 + mainCard.mouseCoords.rotateY * 2}deg, transparent 35%, rgba(255,255,255,0.08) 50%, transparent 65%)`,
+                transition: 'opacity 0.25s ease-out',
+              }}
+            />
 
-        <div className="relative z-10 flex flex-col">
-          {/* Header Row: 🔥 Calories + status fina ao lado + Seletor de Data */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-base sm:text-lg">🔥</span>
-              <span className="text-sm sm:text-base font-medium text-zinc-200 tracking-tight">
-                Calories
-              </span>
-              {/* Palavras com fonte fina seguindo a cor atual: Ok! Good! Excelent! Max! Stop! */}
-              <span
-                className="text-xs sm:text-sm font-light tracking-wide transition-colors duration-300 ml-0.5"
-                style={{ color: statusConfig.color }}
-              >
-                {statusConfig.word}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              {/* Date selector */}
-              <div className="relative flex items-center">
-                <label
-                  htmlFor="fuel-date-picker"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1b1b1f] hover:bg-[#24242a] border border-[#2a2a32] text-xs font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer select-none"
-                >
-                  <CalendarIcon className="w-3 h-3 text-zinc-400" />
-                  <span>{formatDateShort(selectedDate)}</span>
-                  <input
-                    id="fuel-date-picker"
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => {
-                      if (e.target.value) setSelectedDate(e.target.value);
-                    }}
-                    className="absolute inset-0 opacity-0 pointer-events-auto cursor-pointer [color-scheme:dark]"
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* ========================================================================= */}
-          {/* Circular Progress Ring: Sentido anti-horário partindo de 12h               */}
-          {/* Dentro do círculo: número moderno e limpo, sem ser Newsreader serif       */}
-          {/* ========================================================================= */}
-          <div className="relative flex items-center justify-center my-6 sm:my-8 py-2">
-            <div className="relative w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center">
-              <svg className="w-full h-full" viewBox="0 0 240 240">
-                {/* Background Ring Track */}
-                <circle
-                  cx="120"
-                  cy="120"
-                  r={radius}
-                  fill="none"
-                  stroke="#1c1c20"
-                  strokeWidth="18"
-                  className="transition-colors"
-                />
-
-                {/* Animated Dynamic Color Arc (Sentido anti-horário) */}
-                <g transform="translate(240, 0) scale(-1, 1) rotate(-90 120 120)">
-                  <circle
-                    cx="120"
-                    cy="120"
-                    r={radius}
-                    fill="none"
-                    stroke={statusConfig.color}
-                    strokeWidth="18"
-                    strokeLinecap="round"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                    className="transition-all duration-700 ease-out"
-                    style={{
-                      filter: `drop-shadow(0 0 10px ${statusConfig.glow})`,
-                    }}
-                  />
-                </g>
-              </svg>
-
-              {/* Inside the Ring: número moderno (sans serif limpa) com formatação de milhar */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none pointer-events-none px-4">
-                <div className="flex items-baseline justify-center gap-1">
-                  <span className="font-sans font-semibold text-5xl sm:text-6xl text-white tracking-tight leading-none tabular-nums">
-                    {formatKcal(netCalories)}
-                  </span>
-                  <span className="text-sm sm:text-base text-zinc-400 font-medium tracking-wide">
-                    kcal
-                  </span>
+            <div className="relative z-10 flex flex-col">
+              {/* Header Row: 🔥 Calories + status fina ao lado + Total de Calorias embaixo do label Calories + Seletor de Data */}
+              <div className="flex items-start justify-between">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base sm:text-lg">🔥</span>
+                    <span className="text-sm sm:text-base font-medium text-zinc-200 tracking-tight">
+                      Calories
+                    </span>
+                    <span
+                      className="text-xs sm:text-sm font-light tracking-wide transition-colors duration-300 ml-0.5"
+                      style={{
+                        color: statusConfig.color,
+                        textShadow: `0 0 12px ${statusConfig.glow}`,
+                      }}
+                    >
+                      {statusConfig.word}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-1 pl-6 sm:pl-7">
+                    <span className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-none">
+                      {formatKcal(netCalories)}
+                    </span>
+                    <span className="text-xs text-zinc-400 font-medium">kcal</span>
+                  </div>
                 </div>
 
-                {/* Embaixo do kcal: x (número consumido) / total de kcal */}
-                <div className="flex items-center gap-1 mt-2 text-xs sm:text-sm font-mono text-zinc-400">
-                  <span className="text-zinc-200 font-semibold">
-                    {formatKcal(consumedCalories)}
-                  </span>
-                  <span className="text-zinc-600">/</span>
-                  <span className="text-zinc-400">
-                    {formatKcal(baseCalorieGoal)} kcal
-                  </span>
+                {/* Seletor de Data com formato: xx/xx . Dia (ex: 18/09 . Sexta) */}
+                <div
+                  className="relative flex items-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <label
+                    htmlFor="fuel-date-picker"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#18181c] hover:bg-[#22222a] border border-[#272730] text-xs font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer select-none shadow-sm"
+                  >
+                    <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
+                    <span className="font-medium tracking-tight">{formatDateWithDay(selectedDate)}</span>
+                    <input
+                      id="fuel-date-picker"
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => {
+                        if (e.target.value) setSelectedDate(e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute inset-0 opacity-0 pointer-events-auto cursor-pointer [color-scheme:dark]"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Circular Progress Ring */}
+              <div className="relative flex flex-col items-center justify-center my-6 sm:my-8 py-2">
+                <div className="relative w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center">
+                  <svg className="w-full h-full" viewBox="0 0 240 240">
+                    <circle
+                      cx="120"
+                      cy="120"
+                      r={radius}
+                      fill="none"
+                      stroke="#1c1c20"
+                      strokeWidth="18"
+                      className="transition-colors"
+                    />
+                    <g transform="translate(240, 0) scale(-1, 1) rotate(-90 120 120)">
+                      <circle
+                        cx="120"
+                        cy="120"
+                        r={radius}
+                        fill="none"
+                        stroke={statusConfig.color}
+                        strokeWidth="18"
+                        strokeLinecap="round"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={strokeDashoffset}
+                        className="transition-all duration-700 ease-out"
+                      />
+                    </g>
+                  </svg>
+
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none pointer-events-none px-4">
+                    <span className="font-sans font-semibold text-5xl sm:text-6xl text-white tracking-tight leading-none tabular-nums">
+                      {percentage}%
+                    </span>
+                    <div className="flex items-center gap-1 mt-2 text-xs sm:text-sm font-mono text-zinc-400">
+                      <span className="text-zinc-200 font-semibold">
+                        {formatKcal(consumedCalories)}
+                      </span>
+                      <span className="text-zinc-600">/</span>
+                      <span className="text-zinc-400">
+                        {formatKcal(baseCalorieGoal)} kcal
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {totalBurned > 0 && (
-                  <span className="text-[11px] font-mono text-zinc-500 mt-1">
-                    -{totalBurned} kcal gastas
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 2. CARDS DE TREINO E CARDIO NO ESTILO EXATO DA FOTO DO USUÁRIO             */}
-      {/* Com efeitos do PromptCard (3D tilt + flashlight border + ambient glow)     */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        {/* Card 1: Treino (Estilo Steps da foto: título + check, valor 0/210 + gráfico de barras) */}
-        <div
-          id="btn-toggle-workout"
-          ref={workoutCard.ref}
-          onClick={handleToggleWorkout}
-          onMouseMove={workoutCard.handleMouseMove}
-          onMouseEnter={workoutCard.handleMouseEnter}
-          onMouseLeave={workoutCard.handleMouseLeave}
-          style={{
-            transform: workoutCard.mouseCoords.isInteracting
-              ? `perspective(1000px) rotateX(${workoutCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${workoutCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.015, 1.015, 1.015)`
-              : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
-            transition: workoutCard.mouseCoords.isInteracting
-              ? 'transform 0.08s ease-out'
-              : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
-          }}
-          className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-[22px] bg-[#141416] border border-[#222226] hover:border-[#383842] shadow-[0_4px_20px_rgba(0,0,0,0.45)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,255,255,0.04)] transition-all duration-300 cursor-pointer select-none active:scale-[0.99] preserve-3d overflow-hidden"
-        >
-          {/* Flashlight Border Glow (Monochromatic) */}
-          <div
-            className="flashlight-layer absolute inset-0 rounded-[22px] p-[1px] pointer-events-none z-10"
-            style={{
-              opacity: workoutCard.mouseCoords.isInteracting ? 1 : 0,
-              background: workoutCard.mouseCoords.isInteracting
-                ? `radial-gradient(220px circle at ${workoutCard.mouseCoords.x}px ${workoutCard.mouseCoords.y}px, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.05) 40%, transparent 75%)`
-                : 'none',
-              WebkitMask:
-                'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-              WebkitMaskComposite: 'xor',
-              maskComposite: 'exclude',
-            }}
-          />
-
-          {/* Flashlight Ambient Surface Glow */}
-          <div
-            className="flashlight-layer absolute inset-0 pointer-events-none rounded-[22px] z-0"
-            style={{
-              opacity: workoutCard.mouseCoords.isInteracting ? 1 : 0,
-              background: workoutCard.mouseCoords.isInteracting
-                ? `radial-gradient(260px circle at ${workoutCard.mouseCoords.x}px ${workoutCard.mouseCoords.y}px, rgba(255, 255, 255, 0.035), transparent 75%)`
-                : 'none',
-            }}
-          />
-
-          {/* Subtle reflection */}
-          <div
-            className="holographic-foil absolute inset-0 pointer-events-none rounded-[22px] z-20 pointer-events-none"
-            style={{
-              opacity: workoutCard.mouseCoords.isInteracting ? 0.22 : 0,
-              background: `linear-gradient(${115 + workoutCard.mouseCoords.rotateY * 2}deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)`,
-              transition: 'opacity 0.25s ease-out',
-            }}
-          />
-
-          {/* Content layer */}
-          <div className="relative z-10 flex flex-col justify-between h-full">
-            {/* Top Row: Ícone + Treino + Check apenas quando selecionado (sem círculo) */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Dumbbell className={`w-4 h-4 ${isWorkoutDone ? 'text-white' : 'text-zinc-400'}`} />
-                <span className="text-xs sm:text-sm font-medium text-white tracking-tight">
-                  Treino
-                </span>
-              </div>
-              {/* Check apenas quando selecionado, sem círculo */}
-              <div className="w-5 h-5 flex items-center justify-end">
-                {isWorkoutDone && (
-                  <Check className="w-4 h-4 text-white stroke-[2.5]" />
-                )}
-              </div>
-            </div>
-
-            {/* Bottom Row: Valor (inicia em 0, e selecionado aparece 210) e Gráfico com opacidade bem mais baixa sem seleção */}
-            <div className="flex items-end justify-between mt-5 pt-1">
-              <div className="flex flex-col">
-                <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
-                  {isWorkoutDone ? '210' : '0'}
-                </span>
-                <span className="text-xs text-zinc-400 font-medium mt-1">
-                  kcal
-                </span>
-              </div>
-
-              {/* Gráfico de Barras Verticais arredondadas (com opacidade bem mais baixa quando desmarcado) */}
-              <div className={`flex items-end gap-1.5 h-10 pb-0.5 transition-opacity duration-300 ${isWorkoutDone ? 'opacity-100' : 'opacity-[0.07]'}`}>
-                <div
-                  className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
-                    isWorkoutDone ? 'bg-zinc-300' : 'bg-zinc-700'
-                  }`}
-                  style={{ height: '40%' }}
-                />
-                <div
-                  className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
-                    isWorkoutDone ? 'bg-zinc-200' : 'bg-zinc-600'
-                  }`}
-                  style={{ height: '65%' }}
-                />
-                <div
-                  className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
-                    isWorkoutDone ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'bg-zinc-400'
-                  }`}
-                  style={{ height: '100%' }}
-                />
-                <div
-                  className={`w-2 sm:w-2.5 rounded-full transition-all duration-300 ${
-                    isWorkoutDone ? 'bg-zinc-300' : 'bg-zinc-700'
-                  }`}
-                  style={{ height: '50%' }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Cardio (Estilo Water da foto: título + check, valor 0/200 + linha de onda) */}
-        <div
-          id="btn-toggle-cardio"
-          ref={cardioCard.ref}
-          onClick={handleToggleCardio}
-          onMouseMove={cardioCard.handleMouseMove}
-          onMouseEnter={cardioCard.handleMouseEnter}
-          onMouseLeave={cardioCard.handleMouseLeave}
-          style={{
-            transform: cardioCard.mouseCoords.isInteracting
-              ? `perspective(1000px) rotateX(${cardioCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${cardioCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.015, 1.015, 1.015)`
-              : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
-            transition: cardioCard.mouseCoords.isInteracting
-              ? 'transform 0.08s ease-out'
-              : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
-          }}
-          className="group relative flex flex-col justify-between p-4 sm:p-5 rounded-[22px] bg-[#141416] border border-[#222226] hover:border-[#383842] shadow-[0_4px_20px_rgba(0,0,0,0.45)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,255,255,0.04)] transition-all duration-300 cursor-pointer select-none active:scale-[0.99] preserve-3d overflow-hidden"
-        >
-          {/* Flashlight Border Glow (Monochromatic) */}
-          <div
-            className="flashlight-layer absolute inset-0 rounded-[22px] p-[1px] pointer-events-none z-10"
-            style={{
-              opacity: cardioCard.mouseCoords.isInteracting ? 1 : 0,
-              background: cardioCard.mouseCoords.isInteracting
-                ? `radial-gradient(220px circle at ${cardioCard.mouseCoords.x}px ${cardioCard.mouseCoords.y}px, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.05) 40%, transparent 75%)`
-                : 'none',
-              WebkitMask:
-                'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-              WebkitMaskComposite: 'xor',
-              maskComposite: 'exclude',
-            }}
-          />
-
-          {/* Flashlight Ambient Surface Glow */}
-          <div
-            className="flashlight-layer absolute inset-0 pointer-events-none rounded-[22px] z-0"
-            style={{
-              opacity: cardioCard.mouseCoords.isInteracting ? 1 : 0,
-              background: cardioCard.mouseCoords.isInteracting
-                ? `radial-gradient(260px circle at ${cardioCard.mouseCoords.x}px ${cardioCard.mouseCoords.y}px, rgba(255, 255, 255, 0.035), transparent 75%)`
-                : 'none',
-            }}
-          />
-
-          {/* Subtle reflection */}
-          <div
-            className="holographic-foil absolute inset-0 pointer-events-none rounded-[22px] z-20 pointer-events-none"
-            style={{
-              opacity: cardioCard.mouseCoords.isInteracting ? 0.22 : 0,
-              background: `linear-gradient(${115 + cardioCard.mouseCoords.rotateY * 2}deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)`,
-              transition: 'opacity 0.25s ease-out',
-            }}
-          />
-
-          {/* Content layer */}
-          <div className="relative z-10 flex flex-col justify-between h-full">
-            {/* Top Row: Ícone + Cardio + Check apenas quando selecionado (sem círculo) */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Activity className={`w-4 h-4 ${isCardioDone ? 'text-white' : 'text-zinc-400'}`} />
-                <span className="text-xs sm:text-sm font-medium text-white tracking-tight">
-                  Cardio
-                </span>
-              </div>
-              {/* Check apenas quando selecionado, sem círculo */}
-              <div className="w-5 h-5 flex items-center justify-end">
-                {isCardioDone && (
-                  <Check className="w-4 h-4 text-white stroke-[2.5]" />
-                )}
-              </div>
-            </div>
-
-            {/* Bottom Row: Valor (inicia em 0, e selecionado aparece 200) e Linha com opacidade bem mais baixa sem seleção */}
-            <div className="flex items-end justify-between mt-5 pt-1">
-              <div className="flex flex-col">
-                <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
-                  {isCardioDone ? '200' : '0'}
-                </span>
-                <span className="text-xs text-zinc-400 font-medium mt-1">
-                  kcal
-                </span>
-              </div>
-
-              {/* Linha em formato de onda suave em SVG (com opacidade bem mais baixa quando desmarcado) */}
-              <div className={`w-16 sm:w-20 h-10 flex items-center justify-end transition-opacity duration-300 ${isCardioDone ? 'opacity-100' : 'opacity-[0.07]'}`}>
-                <svg viewBox="0 0 80 40" className="w-full h-full overflow-visible">
-                  <path
-                    d="M 2,28 Q 12,28 20,20 T 38,18 T 54,8 T 68,26 T 78,22"
-                    fill="none"
-                    stroke={isCardioDone ? '#ffffff' : '#a1a1aa'}
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="transition-all duration-300"
-                    style={{
-                      filter: isCardioDone ? 'drop-shadow(0 0 4px rgba(255,255,255,0.4))' : 'none',
-                    }}
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. HISTÓRICO DE REFEIÇÕES                                                 */}
-      {/* "se nenhum refeição for registarda nao coloque nada"                       */}
-      {/* ========================================================================= */}
-      {dayMeals.length > 0 && (
-        <div className="flex flex-col gap-2.5 mt-1">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="text-sm font-semibold text-zinc-200">
-              Historico
-            </h3>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {dayMeals.map((meal) => (
-              <div
-                key={meal.id}
-                onClick={() => handleOpenEditMeal(meal)}
-                className="group relative flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-[#141416] border border-[#222226] hover:border-zinc-500 transition-all duration-200 shadow-sm cursor-pointer"
-                title="Toque para editar ou excluir"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-[#1b1b20] border border-[#282830] flex items-center justify-center text-xs text-white shrink-0">
-                    🔥
+                  <div className="mt-3 text-xs sm:text-sm font-mono text-zinc-400 select-none">
+                    <span className="text-zinc-300 font-normal">-{totalBurned} kcal gastas</span>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-white tracking-tight">
-                      {meal.name}
-                    </span>
-                    {meal.time && (
-                      <div className="flex items-center gap-1 mt-0.5 text-xs text-zinc-400">
-                        <Clock className="w-3 h-3" />
-                        <span className="font-mono text-[11px]">{meal.time}</span>
-                      </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 2. CARDS DE TREINO E CARDIO CLÁSSICOS COM 3D TILT */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            {/* Card 1: Treino */}
+            <div
+              id="btn-toggle-workout"
+              ref={workoutCard.ref}
+              onClick={handleToggleWorkout}
+              onMouseMove={workoutCard.handleMouseMove}
+              onMouseEnter={workoutCard.handleMouseEnter}
+              onMouseLeave={workoutCard.handleMouseLeave}
+              style={{
+                transform: workoutCard.mouseCoords.isInteracting
+                  ? `perspective(1000px) rotateX(${workoutCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${workoutCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.015, 1.015, 1.015)`
+                  : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
+                transition: workoutCard.mouseCoords.isInteracting
+                  ? 'transform 0.08s ease-out'
+                  : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
+              }}
+              className="group relative flex flex-col justify-between p-4 sm:p-4.5 rounded-[20px] bg-[#121215] border border-[#1f1f24] hover:border-[#32323b] shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 cursor-pointer select-none active:scale-[0.99] preserve-3d overflow-hidden"
+            >
+              <div
+                className="flashlight-layer absolute inset-0 rounded-[20px] p-[1px] pointer-events-none z-10"
+                style={{
+                  opacity: workoutCard.mouseCoords.isInteracting ? 1 : 0,
+                  background: workoutCard.mouseCoords.isInteracting
+                    ? `radial-gradient(220px circle at ${workoutCard.mouseCoords.x}px ${workoutCard.mouseCoords.y}px, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.04) 40%, transparent 75%)`
+                    : 'none',
+                  WebkitMask:
+                    'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  WebkitMaskComposite: 'xor',
+                  maskComposite: 'exclude',
+                }}
+              />
+              <div
+                className="flashlight-layer absolute inset-0 pointer-events-none rounded-[20px] z-0"
+                style={{
+                  opacity: workoutCard.mouseCoords.isInteracting ? 1 : 0,
+                  background: workoutCard.mouseCoords.isInteracting
+                    ? `radial-gradient(260px circle at ${workoutCard.mouseCoords.x}px ${workoutCard.mouseCoords.y}px, rgba(255, 255, 255, 0.03), transparent 75%)`
+                    : 'none',
+                }}
+              />
+              <div className="relative z-10 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-medium text-zinc-200 tracking-tight">
+                    Treino
+                  </span>
+                  <div className="w-4 h-4 flex items-center justify-end">
+                    {isWorkoutDone && (
+                      <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
                     )}
                   </div>
                 </div>
-
-                <span className="px-2.5 py-1 rounded-lg bg-[#1a1a20] border border-[#2c2c36] font-mono text-xs font-semibold text-white">
-                  {meal.calories} kcal
-                </span>
+                <div className="flex items-end justify-between mt-4 pt-0.5">
+                  <div className="flex flex-col">
+                    <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
+                      {isWorkoutDone ? '210' : '0'}
+                    </span>
+                    <span className="text-[11px] font-mono text-zinc-400 font-medium mt-1">
+                      kcal
+                    </span>
+                  </div>
+                </div>
               </div>
-            ))}
+            </div>
+
+            {/* Card 2: Cardio */}
+            <div
+              id="btn-toggle-cardio"
+              ref={cardioCard.ref}
+              onClick={handleToggleCardio}
+              onMouseMove={cardioCard.handleMouseMove}
+              onMouseEnter={cardioCard.handleMouseEnter}
+              onMouseLeave={cardioCard.handleMouseLeave}
+              style={{
+                transform: cardioCard.mouseCoords.isInteracting
+                  ? `perspective(1000px) rotateX(${cardioCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${cardioCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.015, 1.015, 1.015)`
+                  : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
+                transition: cardioCard.mouseCoords.isInteracting
+                  ? 'transform 0.08s ease-out'
+                  : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
+              }}
+              className="group relative flex flex-col justify-between p-4 sm:p-4.5 rounded-[20px] bg-[#121215] border border-[#1f1f24] hover:border-[#32323b] shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 cursor-pointer select-none active:scale-[0.99] preserve-3d overflow-hidden"
+            >
+              <div
+                className="flashlight-layer absolute inset-0 rounded-[20px] p-[1px] pointer-events-none z-10"
+                style={{
+                  opacity: cardioCard.mouseCoords.isInteracting ? 1 : 0,
+                  background: cardioCard.mouseCoords.isInteracting
+                    ? `radial-gradient(220px circle at ${cardioCard.mouseCoords.x}px ${cardioCard.mouseCoords.y}px, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.04) 40%, transparent 75%)`
+                    : 'none',
+                  WebkitMask:
+                    'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  WebkitMaskComposite: 'xor',
+                  maskComposite: 'exclude',
+                }}
+              />
+              <div
+                className="flashlight-layer absolute inset-0 pointer-events-none rounded-[20px] z-0"
+                style={{
+                  opacity: cardioCard.mouseCoords.isInteracting ? 1 : 0,
+                  background: cardioCard.mouseCoords.isInteracting
+                    ? `radial-gradient(260px circle at ${cardioCard.mouseCoords.x}px ${cardioCard.mouseCoords.y}px, rgba(255, 255, 255, 0.03), transparent 75%)`
+                    : 'none',
+                }}
+              />
+              <div className="relative z-10 flex flex-col justify-between h-full">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-medium text-zinc-200 tracking-tight">
+                    Cardio
+                  </span>
+                  <div className="w-4 h-4 flex items-center justify-end">
+                    {isCardioDone && (
+                      <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-end justify-between mt-4 pt-0.5">
+                  <div className="flex flex-col">
+                    <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
+                      {isCardioDone ? '200' : '0'}
+                    </span>
+                    <span className="text-[11px] font-mono text-zinc-400 font-medium mt-1">
+                      kcal
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* 4. COMPARTILHAR E LIMPAR BEM EMBAIXO DO SITE                               */}
-      {/* "deixe bem embaixo do site para ficar mais para baixo,                     */}
-      {/* e troque o nome para Compartilhar, e Limpar"                              */}
-      {/* ========================================================================= */}
-      <div className="flex items-center justify-center gap-3 pt-12 pb-16 mt-8 border-t border-[#1c1c22]">
-        {/* Compartilhar */}
-        <button
-          type="button"
-          id="btn-fuel-share-whatsapp"
-          onClick={handleShareWhatsApp}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#141416] hover:bg-[#1e1e24] border border-[#24242a] hover:border-[#383842] text-zinc-200 hover:text-white text-xs sm:text-sm font-medium transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
-          title="Compartilhar resumo"
-        >
-          <Share2 className="w-4 h-4 text-white" />
-          <span>Compartilhar</span>
-        </button>
+          {/* 3. HISTÓRICO DE REFEIÇÕES CLÁSSICO */}
+          {dayMeals.length > 0 && (
+            <div className="flex flex-col gap-2.5 mt-1">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-sm font-semibold text-zinc-200">
+                  Historico
+                </h3>
+              </div>
 
-        {/* Limpar */}
-        <button
-          type="button"
-          id="btn-fuel-clear-day"
-          onClick={() => setIsClearConfirmOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#141416] hover:bg-red-950/30 border border-[#24242a] hover:border-red-900/40 text-zinc-400 hover:text-red-400 text-xs sm:text-sm font-medium transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
-          title="Limpar dia"
-        >
-          <RotateCcw className="w-4 h-4 text-zinc-400" />
-          <span>Limpar</span>
-        </button>
-      </div>
+              <div className="flex flex-col gap-2">
+                {dayMeals.map((meal) => (
+                  <div
+                    key={meal.id}
+                    onClick={() => handleOpenEditMeal(meal)}
+                    className="group relative flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-[#141416] border border-[#222226] hover:border-zinc-500 transition-all duration-200 shadow-sm cursor-pointer"
+                    title="Toque para editar ou excluir"
+                  >
+                    <div className="flex flex-col min-w-0 pr-3">
+                      <span className="text-sm font-medium text-white tracking-tight truncate">
+                        {meal.name}
+                      </span>
+                      {meal.time && (
+                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-zinc-400">
+                          <Clock className="w-3 h-3 text-zinc-500" />
+                          <span className="font-mono text-[11px] text-zinc-400">{meal.time}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <span className="px-2.5 py-1 rounded-lg bg-[#1a1a20] border border-[#2c2c36] font-mono text-xs font-semibold text-white shrink-0">
+                      {meal.calories} kcal
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 4. COMPARTILHAR E LIMPAR CLÁSSICO */}
+          <div className="flex items-center justify-center gap-3 pt-12 pb-16 mt-8 border-t border-[#1c1c22]">
+            <button
+              type="button"
+              id="btn-fuel-share-whatsapp"
+              onClick={handleShareWhatsApp}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#141416] hover:bg-[#1e1e24] border border-[#24242a] hover:border-[#383842] text-zinc-200 hover:text-white text-xs sm:text-sm font-medium transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
+              title="Compartilhar resumo"
+            >
+              <Share2 className="w-4 h-4 text-white" />
+              <span>Compartilhar</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-fuel-clear-day"
+              onClick={() => setIsClearConfirmOpen(true)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#141416] hover:bg-red-950/30 border border-[#24242a] hover:border-red-900/40 text-zinc-400 hover:text-red-400 text-xs sm:text-sm font-medium transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
+              title="Limpar dia"
+            >
+              <RotateCcw className="w-4 h-4 text-zinc-400" />
+              <span>Limpar</span>
+            </button>
+          </div>
 
       {/* ========================================================================= */}
       {/* POPUP STEP 1: DIGITAR APENAS O VALOR DAS CALORIAS (Layout da imagem)      */}

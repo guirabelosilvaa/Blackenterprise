@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { TaskItem, TaskCategoryType } from '../types';
-import { X, Check, Trash2, Calendar, CheckSquare, Plus, Folder, User, Briefcase, Clock, FileText } from 'lucide-react';
+import { TaskItem, TaskCategoryType, SubtaskItem } from '../types';
+import { X, Check, Trash2, Calendar, CheckSquare, Plus, Folder, User, Briefcase, Clock, FileText, Flame, ListTodo } from 'lucide-react';
 
 interface NewTaskModalProps {
   isOpen: boolean;
@@ -35,6 +35,9 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const [notes, setNotes] = useState('');
   const [selectedProject, setSelectedProject] = useState('');
   const [newProjectInput, setNewProjectInput] = useState('');
+  const [urgent, setUrgent] = useState(false);
+  const [subtasks, setSubtasks] = useState<SubtaskItem[]>([]);
+  const [newSubtaskInput, setNewSubtaskInput] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saveCheck, setSaveCheck] = useState(false);
 
@@ -61,6 +64,8 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
       setSelectedProject(editingTask.taskType === 'daily' ? '' : (editingTask.project || (savedProjects[0] || '')));
       setTime(editingTask.time || '');
       setNotes(editingTask.notes || '');
+      setUrgent(editingTask.urgent ?? false);
+      setSubtasks(editingTask.subtasks ? [...editingTask.subtasks] : []);
     } else {
       setTitle('');
       setDate(defaultDate && defaultDate !== 'all' ? defaultDate : getTodayIso());
@@ -68,8 +73,11 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
       setSelectedProject(defaultTaskType === 'daily' ? '' : (savedProjects[0] || ''));
       setTime('');
       setNotes('');
+      setUrgent(false);
+      setSubtasks([]);
     }
     setNewProjectInput('');
+    setNewSubtaskInput('');
     setConfirmDelete(false);
     setSaveCheck(false);
   }, [isOpen, editingTask, defaultDate, defaultTaskType, savedProjects]);
@@ -112,6 +120,8 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
         time: taskType === 'daily' ? (time.trim() || undefined) : undefined,
         completed: editingTask?.completed ?? false,
         taskType: taskType,
+        urgent: urgent,
+        subtasks: taskType === 'business' ? subtasks : undefined,
       };
 
       onSave(taskData);
@@ -233,11 +243,26 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
                 </div>
               </div>
 
-              {/* Row 1: Tarefa (Nome) */}
+              {/* Row 1: Tarefa (Nome) + Urgente Toggle */}
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="new-task-input-title" className="text-[11px] font-medium text-zinc-400">
-                  Tarefa
-                </label>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="new-task-input-title" className="text-[11px] font-medium text-zinc-400">
+                    Tarefa
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setUrgent((prev) => !prev)}
+                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
+                      urgent
+                        ? 'bg-red-950/60 text-red-400 border border-red-800/60 shadow-[0_0_10px_rgba(239,68,68,0.2)]'
+                        : 'text-zinc-500 hover:text-zinc-300 border border-transparent hover:bg-[#1a1a20]'
+                    }`}
+                    title={urgent ? 'Tarefa urgente marcada' : 'Marcar como urgente'}
+                  >
+                    <Flame className={`w-3 h-3 ${urgent ? 'text-red-500 fill-red-500/25' : ''}`} />
+                    <span>{urgent ? 'Urgente' : 'Normal'}</span>
+                  </button>
+                </div>
                 <input
                   id="new-task-input-title"
                   type="text"
@@ -412,6 +437,103 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
                       Nenhum projeto cadastrado. Digite o nome acima e pressione Enter para criar.
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Row 4: Subtarefas (apenas para tarefas Black) */}
+              {taskType !== 'daily' && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
+                      <ListTodo className="w-3 h-3 text-zinc-400" />
+                      <span>Subtarefas ({subtasks.length})</span>
+                    </span>
+                  </div>
+
+                  {/* Lista de subtarefas no modal */}
+                  {subtasks.length > 0 && (
+                    <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
+                      {subtasks.map((st) => (
+                        <div
+                          key={st.id}
+                          className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-[#0a0a0c] border border-[#202025]"
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSubtasks((prev) =>
+                                  prev.map((s) => (s.id === st.id ? { ...s, completed: !s.completed } : s))
+                                )
+                              }
+                              className="cursor-pointer"
+                            >
+                              <div
+                                className={`w-3.5 h-3.5 rounded flex items-center justify-center transition-colors ${
+                                  st.completed ? 'bg-emerald-500 text-black' : 'border border-zinc-600 hover:border-zinc-400'
+                                }`}
+                              >
+                                {st.completed && <Check className="w-2.5 h-2.5 stroke-[3] text-black" />}
+                              </div>
+                            </button>
+                            <span
+                              className={`text-xs truncate ${
+                                st.completed ? 'line-through text-zinc-500' : 'text-zinc-200'
+                              }`}
+                            >
+                              {st.title}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSubtasks((prev) => prev.filter((s) => s.id !== st.id))}
+                            className="text-zinc-500 hover:text-red-400 p-0.5 cursor-pointer transition-colors"
+                            title="Excluir subtarefa"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Input para adicionar nova subtarefa */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newSubtaskInput}
+                      onChange={(e) => setNewSubtaskInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (newSubtaskInput.trim()) {
+                            setSubtasks((prev) => [
+                              ...prev,
+                              { id: `st-${Date.now()}`, title: newSubtaskInput.trim(), completed: false },
+                            ]);
+                            setNewSubtaskInput('');
+                          }
+                        }
+                      }}
+                      placeholder="Nova subtarefa... (Enter para adicionar)"
+                      className="w-full h-8 px-3 text-xs bg-[#0a0a0c] text-white border border-[#232328] rounded-lg focus:outline-none focus:border-zinc-300 transition-colors placeholder:text-zinc-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newSubtaskInput.trim()) {
+                          setSubtasks((prev) => [
+                            ...prev,
+                            { id: `st-${Date.now()}`, title: newSubtaskInput.trim(), completed: false },
+                          ]);
+                          setNewSubtaskInput('');
+                        }
+                      }}
+                      className="h-8 px-2.5 bg-[#18181d] hover:bg-[#25252c] text-zinc-300 hover:text-white border border-[#2a2a33] rounded-lg text-xs font-medium transition-colors cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               )}
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PromptItem, TaskItem, MealItem, DayFuelData } from '../types';
+import { PromptItem, TaskItem, SubtaskItem, MealItem, DayFuelData } from '../types';
 import {
   X,
   Download,
@@ -118,6 +118,14 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           taskType: isDaily ? 'daily' : 'business',
           time: t.time || '',
           notes: t.notes || '',
+          urgent: !!t.urgent,
+          subtasks: Array.isArray(t.subtasks)
+            ? t.subtasks.map((s) => ({
+                id: s.id,
+                title: s.title,
+                completed: !!s.completed,
+              }))
+            : [],
         };
       }),
       meals: meals.map((m) => ({
@@ -396,6 +404,28 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
         const rawDate = item.date !== undefined ? item.date : item.data;
 
+        // Subtasks parsing (suporta subtasks, subtarefas, sub_tasks, subTasks)
+        const rawSubtasks = item.subtasks ?? item.subtarefas ?? item.sub_tasks ?? item.subTasks;
+        const subtasks: SubtaskItem[] | undefined = Array.isArray(rawSubtasks)
+          ? rawSubtasks
+              .filter((s: any) => s && (typeof s === 'string' || s.title || s.titulo || s.nome || s.text))
+              .map((s: any, sIdx: number) => {
+                if (typeof s === 'string') {
+                  return {
+                    id: `sub-imp-${Date.now()}-${index}-${sIdx}`,
+                    title: s.trim(),
+                    completed: false,
+                  };
+                }
+                return {
+                  id: s.id ? String(s.id) : `sub-imp-${Date.now()}-${index}-${sIdx}`,
+                  title: String(s.title || s.titulo || s.nome || s.text || '').trim(),
+                  completed: Boolean(s.completed || s.concluido || s.done),
+                };
+              })
+              .filter((s: SubtaskItem) => s.title)
+          : undefined;
+
         return {
           id: item.id ? String(item.id) : `task-imp-${Date.now()}-${index}`,
           title: String(item.title || item.titulo || item.task).trim(),
@@ -405,6 +435,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           taskType: (isDaily ? 'daily' : 'business') as 'daily' | 'business',
           time: timeVal,
           notes: notesVal,
+          urgent: Boolean(item.urgent || item.urgente),
+          subtasks: subtasks && subtasks.length > 0 ? subtasks : undefined,
         };
       });
   };

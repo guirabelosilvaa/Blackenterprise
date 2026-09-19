@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { TaskItem } from '../types';
 import {
   Pencil,
@@ -9,6 +9,9 @@ import {
   Calendar,
   User,
   Clock,
+  Flame,
+  ListTodo,
+  Trash2,
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -17,6 +20,11 @@ interface TaskCardProps {
   onEdit?: (task: TaskItem) => void;
   onToggleComplete?: (id: string) => void;
   onMoveToToday?: (id: string) => void;
+  onToggleUrgent?: (id: string) => void;
+  onToggleSubtask?: (taskId: string, subtaskId: string) => void;
+  onAddSubtask?: (taskId: string, title: string) => void;
+  onDeleteSubtask?: (taskId: string, subtaskId: string) => void;
+  onOpenSubtasks?: (task: TaskItem) => void;
   savedProjects?: string[];
   isHovered?: boolean;
   isAnyHovered?: boolean;
@@ -38,6 +46,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onEdit,
   onToggleComplete,
   onMoveToToday,
+  onToggleUrgent,
+  onToggleSubtask,
+  onAddSubtask,
+  onDeleteSubtask,
+  onOpenSubtasks,
   savedProjects,
   isHovered = false,
   isAnyHovered = false,
@@ -53,6 +66,52 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const isCompleted = !!task.completed;
+
+  // Mini Subtasks Hover Pop-up State
+  const [isSubtasksHoverOpen, setIsSubtasksHoverOpen] = useState(false);
+  const subtasksHoverTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const handleSubtasksMouseEnter = () => {
+    if (subtasksHoverTimer.current) {
+      clearTimeout(subtasksHoverTimer.current);
+      subtasksHoverTimer.current = null;
+    }
+    if (onMouseEnter) onMouseEnter();
+    setIsSubtasksHoverOpen(true);
+  };
+
+  const handleSubtasksMouseLeave = () => {
+    if (subtasksHoverTimer.current) {
+      clearTimeout(subtasksHoverTimer.current);
+    }
+    subtasksHoverTimer.current = setTimeout(() => {
+      setIsSubtasksHoverOpen(false);
+    }, 380);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (subtasksHoverTimer.current) {
+        clearTimeout(subtasksHoverTimer.current);
+      }
+    };
+  }, []);
+
+  // When subtasks popover closes and mouse is not over card, clear interaction state smoothly
+  useEffect(() => {
+    if (!isSubtasksHoverOpen && !isHovered) {
+      setMouseCoords({
+        x: 0,
+        y: 0,
+        px: 50,
+        py: 50,
+        rotateX: 0,
+        rotateY: 0,
+        isInteracting: false,
+      });
+      if (onMouseLeave) onMouseLeave();
+    }
+  }, [isSubtasksHoverOpen, isHovered, onMouseLeave]);
 
   // Subtle 3D Tilt & Mouse Coordinates
   const [mouseCoords, setMouseCoords] = useState({
@@ -95,6 +154,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const handleCardMouseLeave = () => {
+    // If subtasks hover popup is currently open, keep card highlighted and active
+    if (isSubtasksHoverOpen) {
+      return;
+    }
     if (onMouseLeave) onMouseLeave();
     setMouseCoords({
       x: 0,
@@ -125,7 +188,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
-  const isDimmed = isAnyHovered && !isHovered;
+  const isDimmed = isAnyHovered && !isHovered && !isSubtasksHoverOpen;
 
   return (
     <motion.div
@@ -138,7 +201,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         delay: Math.min(index * 0.02, 0.1),
         ease: [0.25, 0.46, 0.45, 0.94],
       }}
-      className="card-perspective-container w-full flex items-center gap-3 sm:gap-3.5 group/row"
+      className={`card-perspective-container w-full flex items-center gap-3 sm:gap-3.5 group/row relative transition-[z-index] ${
+        isSubtasksHoverOpen ? 'z-50' : isHovered ? 'z-20' : 'z-0'
+      }`}
       draggable
       onDragStart={(e) => onDragStart && onDragStart(e as unknown as React.DragEvent, task.id)}
       onDragOver={(e) => onDragOver && onDragOver(e as unknown as React.DragEvent, task.id)}
@@ -218,8 +283,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             ? 'transform 0.08s ease-out'
             : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
         }}
-        className={`group relative flex-1 flex flex-col justify-between rounded-2xl bg-[#141416] cursor-grab active:cursor-grabbing p-4 sm:p-5 select-none preserve-3d overflow-hidden transition-all duration-300 ${
-          isCompleted
+        className={`group relative flex-1 flex flex-col justify-between rounded-2xl bg-[#141416] cursor-grab active:cursor-grabbing p-4 sm:p-5 select-none preserve-3d overflow-visible transition-all duration-300 ${
+          isSubtasksHoverOpen
+            ? 'z-50 shadow-[0_12px_40px_rgba(0,0,0,0.95)] border-[#3a3a46]'
+            : isCompleted
             ? 'opacity-40 hover:opacity-75 border border-[#1f1f23] shadow-none'
             : isDragging
             ? 'opacity-25 border border-dashed border-zinc-500 scale-95 shadow-none'
@@ -308,6 +375,138 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               </span>
             )}
 
+            {/* Número de subtarefas: x/x - hover mostra mini pop up para dar check sem lixeira, clique abre popup completo */}
+            {task.taskType !== 'daily' && (
+              (task.subtasks && task.subtasks.length > 0) ? (
+                <div
+                  className="relative inline-flex items-center"
+                  onMouseEnter={handleSubtasksMouseEnter}
+                  onMouseLeave={handleSubtasksMouseLeave}
+                >
+                  <button
+                    type="button"
+                    id={`task-subtask-btn-${task.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsSubtasksHoverOpen(false);
+                      if (onOpenSubtasks) onOpenSubtasks(task);
+                    }}
+                    className="inline-flex items-center px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#18181c] text-zinc-300 hover:text-white hover:bg-[#222228] border border-[#272730] hover:border-[#3a3a46] transition-colors shadow-sm select-none cursor-pointer"
+                    title="Clique para abrir e gerenciar subtarefas"
+                  >
+                    <span>
+                      {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
+                    </span>
+                  </button>
+
+                  {/* Mini pop up on hover para dar check diretamente sem lixeira */}
+                  <AnimatePresence>
+                    {isSubtasksHoverOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 4, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 3, scale: 0.96 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        onMouseEnter={handleSubtasksMouseEnter}
+                        onMouseLeave={handleSubtasksMouseLeave}
+                        className="absolute top-full left-0 pt-1.5 z-50 pointer-events-auto before:content-[''] before:absolute before:-top-3 before:left-0 before:right-0 before:h-4 before:pointer-events-auto"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="min-w-[220px] max-w-[280px] p-2.5 rounded-xl bg-[#09090b] border border-[#1f1f24] shadow-[0_16px_36px_rgba(0,0,0,0.95)] backdrop-blur-md">
+                          <div className="flex flex-col gap-1 max-h-[190px] overflow-y-auto pr-0.5">
+                            {task.subtasks.map((sub) => (
+                              <div
+                                key={sub.id}
+                                className="group/mini-sub flex items-center gap-2.5 py-1.5 px-2 hover:bg-white/[0.04] rounded-lg transition-colors cursor-pointer select-none"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onToggleSubtask) {
+                                    onToggleSubtask(task.id, sub.id);
+                                  }
+                                }}
+                              >
+                                {/* Check Circle Button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onToggleSubtask) {
+                                      onToggleSubtask(task.id, sub.id);
+                                    }
+                                  }}
+                                  className="relative group/circle flex items-center justify-center w-4 h-4 shrink-0 rounded-full cursor-pointer select-none transition-all duration-200 outline-none"
+                                >
+                                  {sub.completed ? (
+                                    <div className="w-full h-full rounded-full bg-emerald-500 border border-emerald-400 flex items-center justify-center shadow-[0_0_8px_rgba(16,185,129,0.35)]">
+                                      <Check className="w-2.5 h-2.5 text-white stroke-[3.2]" />
+                                    </div>
+                                  ) : (
+                                    <div className="relative w-full h-full flex items-center justify-center">
+                                      <svg
+                                        className="w-full h-full rotate-[-90deg] overflow-visible"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <circle
+                                          cx="12"
+                                          cy="12"
+                                          r="9"
+                                          stroke="#4a4a52"
+                                          strokeWidth="2"
+                                          fill="transparent"
+                                          className="transition-colors duration-200 group-hover/circle:stroke-zinc-300"
+                                        />
+                                        <circle
+                                          cx="12"
+                                          cy="12"
+                                          r="9"
+                                          stroke="#ffffff"
+                                          strokeWidth="2.2"
+                                          fill="transparent"
+                                          strokeDasharray="56.5"
+                                          strokeDashoffset="56.5"
+                                          strokeLinecap="round"
+                                          className="transition-all duration-300 ease-out group-hover/circle:stroke-dashoffset-0 group-hover/circle:opacity-100 opacity-0"
+                                        />
+                                      </svg>
+                                      <div className="absolute inset-0 rounded-full bg-white/0 group-hover/circle:bg-white/5 transition-colors pointer-events-none" />
+                                    </div>
+                                  )}
+                                </button>
+
+                                {/* Título da subtarefa */}
+                                <span
+                                  className={`text-xs leading-snug break-words flex-1 min-w-0 transition-all ${
+                                    sub.completed
+                                      ? 'line-through text-zinc-500'
+                                      : 'text-zinc-200 group-hover/mini-sub:text-white'
+                                  }`}
+                                >
+                                  {sub.title}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ) : isHovered ? (
+                <button
+                  type="button"
+                  id={`task-subtask-btn-${task.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onOpenSubtasks) onOpenSubtasks(task);
+                  }}
+                  className="inline-flex items-center px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#18181c] text-zinc-400 hover:text-white hover:bg-[#222228] border border-[#272730] hover:border-[#3a3a46] transition-colors shadow-sm select-none cursor-pointer"
+                  title="Adicionar subtarefas"
+                >
+                  <span>0/0</span>
+                </button>
+              ) : null
+            )}
+
             {/* Daily Tag (para tarefas diárias) */}
             {task.taskType === 'daily' && (
               <span
@@ -341,29 +540,29 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </span>
               );
             })()}
+          </div>
 
-            {/* Data on hover: apenas para tarefas de negócios (tarefas diárias não têm data) */}
+          {/* Right: Data + Símbolo de calendário (colocar no dia de hoje) + Lápis (Edit action) */}
+          <div
+            className="flex items-center gap-1 sm:gap-1.5"
+            draggable={false}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {/* Data on hover: aparece ao lado do calendário na ordem [data] [calendário] */}
             {task.taskType !== 'daily' && task.date && (
               <span
                 id={`task-date-hover-${task.id}`}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md bg-[#18181c] text-zinc-300 border border-[#272730] transition-all duration-200 ${
+                className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md bg-[#18181c] text-zinc-300 border border-[#272730] transition-all duration-200 select-none ${
                   isHovered
-                    ? 'opacity-100 translate-x-0'
-                    : 'opacity-0 -translate-x-1 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0'
+                    ? 'opacity-100 translate-x-0 pointer-events-auto'
+                    : 'opacity-70 sm:opacity-0 -translate-x-1 sm:scale-95 pointer-events-auto sm:pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 group-hover:scale-100 group-hover:pointer-events-auto'
                 }`}
                 title={`Data: ${task.date}`}
               >
                 <span>{formatDateShort(task.date)}</span>
               </span>
             )}
-          </div>
 
-          {/* Right: Símbolo de calendário (colocar no dia de hoje) + Lápis (Edit action) */}
-          <div
-            className="flex items-center gap-1"
-            draggable={false}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
             {/* Calendário: move a tarefa de negócio automaticamente para o dia de hoje (diárias não têm data nem este ícone) */}
             {task.taskType !== 'daily' && onMoveToToday && (
               <button
@@ -416,6 +615,40 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </h3>
         </div>
       </div>
+
+      {/* Símbolo de Tarefa Importante (Foguinho): se a tarefa estiver com o check, o fogo apaga */}
+      <button
+        type="button"
+        id={`btn-urgent-task-${task.id}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onToggleUrgent) onToggleUrgent(task.id);
+        }}
+        className={`shrink-0 p-1.5 rounded-lg transition-all duration-200 cursor-pointer flex items-center justify-center select-none ${
+          isCompleted
+            ? 'opacity-0 pointer-events-none'
+            : task.urgent
+            ? 'text-red-500 hover:text-red-400 opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+            : isHovered
+            ? 'text-zinc-500 hover:text-red-400 opacity-80 hover:opacity-100 scale-105'
+            : 'text-zinc-600 hover:text-zinc-400 opacity-30 hover:opacity-100 group-hover/row:opacity-75'
+        }`}
+        title={
+          isCompleted
+            ? ''
+            : task.urgent
+            ? 'Tarefa urgente (clique para remover urgência)'
+            : 'Marcar como urgente'
+        }
+      >
+        <Flame
+          className={`w-4 h-4 transition-all duration-300 ${
+            !isCompleted && task.urgent
+              ? 'text-red-500 fill-red-500/30'
+              : 'text-zinc-700'
+          }`}
+        />
+      </button>
     </motion.div>
   );
 };
