@@ -89,3 +89,15 @@ export interface DayFuelData {
   cardioDone?: boolean; // Cardio realizado (-200 kcal)
 }
 
+export interface VocabCard {
+  id: string;
+  en: string; // Palavra ou frase em inglês
+  pt: string; // Tradução em português (PT-BR)
+  notes?: string; // Frase de exemplo, contexto ou dica
+  category?: string; // Categoria opcional (ex: "Geral", "Verbos", "Trabalho")
+  createdAt?: string;
+  lastResult?: 'correct' | 'wrong';
+  timesCorrect?: number;
+  timesWrong?: number;
+}
+

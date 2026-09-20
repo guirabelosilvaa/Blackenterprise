@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PromptItem, TaskItem, SubtaskItem, MealItem, DayFuelData } from '../types';
+import { PromptItem, TaskItem, SubtaskItem, MealItem, DayFuelData, VocabCard } from '../types';
 import {
   X,
   Download,
@@ -15,12 +15,13 @@ import {
   FileText,
   CheckSquare,
   Flame,
+  Globe,
 } from 'lucide-react';
 
 interface BackupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  pageContext: 'workspace' | 'prompts' | 'tasks' | 'fuel';
+  pageContext: 'workspace' | 'prompts' | 'tasks' | 'fuel' | 'vocab';
   prompts: PromptItem[];
   tasks: TaskItem[];
   savedProjects?: string[];
@@ -28,12 +29,14 @@ interface BackupModalProps {
   meals?: MealItem[];
   fuelData?: Record<string, DayFuelData>;
   baseCalorieGoal?: number;
+  vocabCards?: VocabCard[];
   onImportPrompts: (imported: PromptItem[], mode: 'replace' | 'merge') => void;
   onImportTasks: (imported: TaskItem[], mode: 'replace' | 'merge') => void;
   onImportAll: (prompts: PromptItem[], tasks: TaskItem[], mode: 'replace' | 'merge') => void;
   onImportProjects?: (projects: string[], mode?: 'replace' | 'merge') => void;
   onImportWorkflows?: (workflows: string[], mode: 'replace' | 'merge') => void;
   onImportFuel?: (meals: MealItem[], fuelData: Record<string, DayFuelData>, baseCalorieGoal: number, mode: 'replace' | 'merge') => void;
+  onImportVocab?: (vocabCards: VocabCard[], mode: 'replace' | 'merge') => void;
 }
 
 export const BackupModal: React.FC<BackupModalProps> = ({
@@ -47,12 +50,14 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   meals = [],
   fuelData = {},
   baseCalorieGoal = 1800,
+  vocabCards = [],
   onImportPrompts,
   onImportTasks,
   onImportAll,
   onImportProjects,
   onImportWorkflows,
   onImportFuel,
+  onImportVocab,
 }) => {
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
@@ -137,8 +142,17 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       })),
       fuelData,
       baseCalorieGoal,
+      vocabCards: (vocabCards || []).map((v) => ({
+        id: v.id,
+        en: v.en,
+        pt: v.pt,
+        notes: v.notes || '',
+        timesCorrect: v.timesCorrect || 0,
+        timesWrong: v.timesWrong || 0,
+        lastResult: v.lastResult || null,
+      })),
     };
-  }, [prompts, tasks, savedProjects, savedWorkflows, meals, fuelData, baseCalorieGoal]);
+  }, [prompts, tasks, savedProjects, savedWorkflows, meals, fuelData, baseCalorieGoal, vocabCards]);
 
   const backupJson = JSON.stringify(backupData, null, 2);
 
@@ -185,8 +199,9 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     let parsedMeals: MealItem[] = [];
     let parsedFuelData: Record<string, DayFuelData> = {};
     let parsedBaseGoal: number = 0;
+    let parsedVocabCards: VocabCard[] = [];
 
-    // Case 1: Unified object with prompts and/or tasks and/or meals
+    // Case 1: Unified object with prompts and/or tasks and/or meals and/or vocab
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       if (Array.isArray(parsed.prompts)) {
         parsedPrompts = validatePromptsList(parsed.prompts);
@@ -211,8 +226,48 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       if (parsed.baseCalorieGoal && typeof parsed.baseCalorieGoal === 'number') {
         parsedBaseGoal = parsed.baseCalorieGoal;
       }
+      const rawVocab =
+        parsed.vocabCards ||
+        parsed.vocab ||
+        parsed.flashcards ||
+        parsed.idioma ||
+        parsed.palavras ||
+        parsed.words ||
+        parsed.cards ||
+        parsed.deck ||
+        parsed.vocabulario;
+
+      if (Array.isArray(rawVocab)) {
+        parsedVocabCards = rawVocab
+          .filter(
+            (v: any) =>
+              v &&
+              (v.en || v.ingles || v.english || v.word || v.termo || v.palavra) &&
+              (v.pt || v.portugues || v.portuguese || v.traducao || v.meaning || v.trad)
+          )
+          .map((v: any, idx: number) => ({
+            id: v.id ? String(v.id) : `vocab-imp-${Date.now()}-${idx}`,
+            en: String(v.en || v.ingles || v.english || v.word || v.termo || v.palavra).trim(),
+            pt: String(v.pt || v.portugues || v.portuguese || v.traducao || v.meaning || v.trad).trim(),
+            notes: v.notes || v.exemplo || v.obs || v.example || undefined,
+            timesCorrect: Number(v.timesCorrect) || 0,
+            timesWrong: Number(v.timesWrong) || 0,
+            lastResult: v.lastResult || undefined,
+          }));
+      }
     } else if (Array.isArray(parsed)) {
-      // Case 2: Array of objects - detect whether it's prompts or tasks
+      // Case 2: Array of objects - detect whether it's prompts, tasks or vocab
+      const looksLikeVocab = parsed.some(
+        (item) =>
+          item &&
+          typeof item === 'object' &&
+          (item.en !== undefined ||
+            item.ingles !== undefined ||
+            item.english !== undefined ||
+            item.termo !== undefined ||
+            (item.word !== undefined && item.pt !== undefined) ||
+            (item.palavra !== undefined && item.traducao !== undefined))
+      );
       const looksLikePrompts = parsed.some(
         (item) => item && typeof item === 'object' && item.template !== undefined
       );
@@ -227,7 +282,24 @@ export const BackupModal: React.FC<BackupModalProps> = ({
             (item.title && item.template === undefined))
       );
 
-      if (looksLikePrompts && !looksLikeTasks) {
+      if (looksLikeVocab && !looksLikePrompts && !looksLikeTasks) {
+        parsedVocabCards = parsed
+          .filter(
+            (v: any) =>
+              v &&
+              (v.en || v.ingles || v.english || v.word || v.termo || v.palavra) &&
+              (v.pt || v.portugues || v.portuguese || v.traducao || v.meaning || v.trad)
+          )
+          .map((v: any, idx: number) => ({
+            id: v.id ? String(v.id) : `vocab-imp-${Date.now()}-${idx}`,
+            en: String(v.en || v.ingles || v.english || v.word || v.termo || v.palavra).trim(),
+            pt: String(v.pt || v.portugues || v.portuguese || v.traducao || v.meaning || v.trad).trim(),
+            notes: v.notes || v.exemplo || v.obs || v.example || undefined,
+            timesCorrect: Number(v.timesCorrect) || 0,
+            timesWrong: Number(v.timesWrong) || 0,
+            lastResult: v.lastResult || undefined,
+          }));
+      } else if (looksLikePrompts && !looksLikeTasks) {
         parsedPrompts = validatePromptsList(parsed);
       } else if (looksLikeTasks && !looksLikePrompts) {
         parsedTasks = validateTasksList(parsed);
@@ -242,9 +314,10 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       parsedPrompts.length === 0 &&
       parsedTasks.length === 0 &&
       parsedMeals.length === 0 &&
-      Object.keys(parsedFuelData).length === 0
+      Object.keys(parsedFuelData).length === 0 &&
+      parsedVocabCards.length === 0
     ) {
-      throw new Error('Nenhum dado válido de prompts, tarefas ou calorias encontrado no JSON.');
+      throw new Error('Nenhum dado válido de prompts, tarefas, calorias ou vocabulário encontrado no JSON.');
     }
 
     // Extract projects if present in the backup or from imported tasks
@@ -289,23 +362,34 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     }
 
     // Apply import
+    const importedSummary: string[] = [];
     if (parsedPrompts.length > 0 && parsedTasks.length > 0) {
       onImportAll(parsedPrompts, parsedTasks, importMode);
-      setSuccessMsg(`${parsedPrompts.length} prompts e ${parsedTasks.length} tarefas sincronizados!`);
+      importedSummary.push(`${parsedPrompts.length} prompts`, `${parsedTasks.length} tarefas`);
     } else if (parsedPrompts.length > 0) {
       onImportPrompts(parsedPrompts, importMode);
-      setSuccessMsg(`${parsedPrompts.length} prompts sincronizados com sucesso!`);
+      importedSummary.push(`${parsedPrompts.length} prompts`);
     } else if (parsedTasks.length > 0) {
       onImportTasks(parsedTasks, importMode);
-      setSuccessMsg(`${parsedTasks.length} tarefas sincronizadas!`);
+      importedSummary.push(`${parsedTasks.length} tarefas`);
     }
 
     // Apply fuel import
     if ((parsedMeals.length > 0 || Object.keys(parsedFuelData).length > 0) && onImportFuel) {
       onImportFuel(parsedMeals, parsedFuelData, parsedBaseGoal, importMode);
-      if (parsedPrompts.length === 0 && parsedTasks.length === 0) {
-        setSuccessMsg(`${parsedMeals.length} refeições e metas de calorias sincronizadas!`);
-      }
+      importedSummary.push(`${parsedMeals.length} refeições`);
+    }
+
+    // Apply vocab import
+    if (parsedVocabCards.length > 0 && onImportVocab) {
+      onImportVocab(parsedVocabCards, importMode);
+      importedSummary.push(`${parsedVocabCards.length} palavras de vocabulário`);
+    }
+
+    if (importedSummary.length > 0) {
+      setSuccessMsg(`${importedSummary.join(', ')} sincronizados com sucesso!`);
+    } else {
+      setSuccessMsg('Dados sincronizados com sucesso!');
     }
 
     setImportConfirmed(true);
@@ -480,6 +564,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   const getModalTitle = () => {
     if (pageContext === 'workspace') return 'Backup Geral';
     if (pageContext === 'tasks') return 'Backup de Tarefas';
+    if (pageContext === 'vocab') return 'Backup de Idioma';
     return 'Backup de Prompts';
   };
 
@@ -497,6 +582,14 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
           <CheckSquare className="w-2.5 h-2.5" />
           <span>Tarefas</span>
+        </span>
+      );
+    }
+    if (pageContext === 'vocab') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700/50">
+          <Globe className="w-2.5 h-2.5" />
+          <span>Inglês / Idioma</span>
         </span>
       );
     }
@@ -637,13 +730,23 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                 /* EXPORT VIEW */
                 <div className="flex flex-col gap-3.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-zinc-400">
-                      {pageContext === 'workspace'
-                        ? `${prompts.length} prompts e ${tasks.length} tarefas prontas para backup`
-                        : pageContext === 'tasks'
-                        ? `${tasks.length} tarefas (${tasks.filter((t) => t.taskType === 'daily').length} diárias)`
-                        : `${prompts.length} prompts na sua biblioteca`}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
+                      <span>Backup completo:</span>
+                      <span className="px-2 py-0.5 rounded-md bg-[#18181c] border border-[#2b2b32] text-zinc-300 font-mono text-[11px]">
+                        {prompts.length} prompts
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-[#18181c] border border-[#2b2b32] text-zinc-300 font-mono text-[11px]">
+                        {tasks.length} tarefas
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-white/10 border border-white/20 text-white font-mono text-[11px] font-semibold">
+                        {(vocabCards || []).length} palavras
+                      </span>
+                      {meals.length > 0 && (
+                        <span className="px-2 py-0.5 rounded-md bg-[#18181c] border border-[#2b2b32] text-zinc-300 font-mono text-[11px]">
+                          {meals.length} refeições
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={handleCopyJson}
@@ -726,7 +829,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                     <textarea
                       value={importText}
                       onChange={(e) => setImportText(e.target.value)}
-                      placeholder='Ex: { "prompts": [...], "tasks": [...] } ou cole o array JSON'
+                      placeholder='Cole o JSON completo do backup { "prompts": [...], "tasks": [...], "vocabCards": [...] } ou um array de palavras [ { "en": "word", "pt": "palavra" } ]'
                       className="w-full h-32 p-3 text-xs font-mono bg-[#09090b] text-zinc-200 border border-[#222228] rounded-xl focus:outline-none focus:border-zinc-300 placeholder:text-zinc-600 resize-none"
                     />
                   </div>

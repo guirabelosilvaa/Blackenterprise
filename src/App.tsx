@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PromptItem, TaskItem, TaskCategoryType, MealItem, DayFuelData } from './types';
+import { PromptItem, TaskItem, TaskCategoryType, MealItem, DayFuelData, VocabCard } from './types';
 import { PromptCard } from './components/PromptCard';
 import { PromptModal } from './components/PromptModal';
 import { NewPromptModal } from './components/NewPromptModal';
@@ -10,6 +10,7 @@ import { SubtasksModal } from './components/SubtasksModal';
 import { WeekTaskbar } from './components/WeekTaskbar';
 import { BackupModal } from './components/BackupModal';
 import { FuelPage } from './components/FuelPage';
+import { LanguagePage } from './components/LanguagePage';
 import { filterTasksWithinWindow } from './utils/taskRules';
 import { persistentStorage } from './utils/cookieStorage';
 import {
@@ -34,6 +35,7 @@ import {
   Flame,
   Share2,
   Eye,
+  Globe,
 } from 'lucide-react';
 
 const PROMPTS_STORAGE_KEY = 'promptvault_user_prompts_v3';
@@ -44,6 +46,7 @@ const TASK_TYPE_STORAGE_KEY = 'promptvault_user_task_type_v1';
 const MEALS_STORAGE_KEY = 'promptvault_user_meals_v1';
 const CALORIE_GOAL_STORAGE_KEY = 'promptvault_user_calorie_goal_v1';
 const FUEL_DATA_STORAGE_KEY = 'promptvault_user_fuel_data_v1';
+const VOCAB_STORAGE_KEY = 'promptvault_user_vocab_v1';
 
 const getTodayIso = () => {
   const d = new Date();
@@ -114,14 +117,17 @@ const INITIAL_TASKS: TaskItem[] = [
   },
 ];
 
-type PageKey = 'workspace' | 'prompts' | 'tasks' | 'fuel';
+type PageKey = 'workspace' | 'prompts' | 'tasks' | 'fuel' | 'vocab';
 
 const PAGE_INDEX_MAP: Record<PageKey, number> = {
   workspace: 0,
   prompts: 1,
   tasks: 2,
   fuel: 3,
+  vocab: 4,
 };
+
+const INITIAL_VOCAB: VocabCard[] = [];
 
 const INITIAL_MEALS: MealItem[] = [
   {
@@ -613,6 +619,66 @@ export default function App() {
   const isPrompts = currentPage === 'prompts';
   const isWorkspace = currentPage === 'workspace';
   const isFuel = currentPage === 'fuel';
+  const isVocab = currentPage === 'vocab';
+
+  // --- Vocab / Language Cards State with persistent storage ---
+  const [vocabCards, setVocabCards] = useState<VocabCard[]>(() => {
+    try {
+      const stored = persistentStorage.getItem(VOCAB_STORAGE_KEY) || localStorage.getItem(VOCAB_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          // Remove default mock words so only user-added words persist
+          const userOnly = parsed.filter((c: VocabCard) => !c.id.startsWith('vocab-init-'));
+          return userOnly;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_VOCAB;
+  });
+
+  const saveVocabCards = (updated: VocabCard[]) => {
+    setVocabCards(updated);
+    try {
+      persistentStorage.setItem(VOCAB_STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem(VOCAB_STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleAddVocabCard = (cardData: Omit<VocabCard, 'id'>) => {
+    const newCard: VocabCard = {
+      ...cardData,
+      id: `vocab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: new Date().toISOString(),
+    };
+    saveVocabCards([newCard, ...vocabCards]);
+  };
+
+  const handleUpdateVocabCard = (updatedCard: VocabCard) => {
+    const updated = vocabCards.map((c) => (c.id === updatedCard.id ? updatedCard : c));
+    saveVocabCards(updated);
+  };
+
+  const handleDeleteVocabCard = (id: string) => {
+    const updated = vocabCards.filter((c) => c.id !== id);
+    saveVocabCards(updated);
+  };
+
+  const handleImportVocab = (importedCards: VocabCard[], mode: 'replace' | 'merge') => {
+    if (mode === 'replace') {
+      saveVocabCards(importedCards);
+    } else {
+      const existingIds = new Set(vocabCards.map((c) => c.id));
+      const existingEn = new Set(vocabCards.map((c) => c.en.toLowerCase().trim()));
+      const toAdd = importedCards.filter(
+        (c) => !existingIds.has(c.id) && !existingEn.has(c.en.toLowerCase().trim())
+      );
+      saveVocabCards([...vocabCards, ...toAdd]);
+    }
+    showNotification(`${importedCards.length} palavras de vocabulário sincronizadas!`);
+  };
 
   // --- Meals & Fuel State with Cookies + LocalStorage synchronization ---
   const [meals, setMeals] = useState<MealItem[]>(() => {
@@ -1668,6 +1734,11 @@ export default function App() {
                   <span className="relative z-10">Daily</span>
                 </button>
               </div>
+            ) : isVocab ? (
+              <div className="flex items-center gap-2">
+                <Globe className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="text-xs font-semibold text-white tracking-tight">Inglês</span>
+              </div>
             ) : (
               /* Workspace header left: completely empty / clean */
               <div className="h-6" />
@@ -1694,7 +1765,7 @@ export default function App() {
             )}
 
             {/* Create Button (+): on Prompts and Tasks, on desktop only */}
-            {!isWorkspace && !isFuel && !isMobile && (
+            {!isWorkspace && !isFuel && !isVocab && !isMobile && (
               <button
                 type="button"
                 id="btn-header-add-item"
@@ -1750,7 +1821,7 @@ export default function App() {
 
       {/* Main Area with Smooth Slide Transition between Pages */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-10 pt-4 sm:pt-6 pb-12 sm:pb-28">
-        {isMobile ? (
+        {isMobile && currentPage === 'fuel' ? (
           <div className="w-full">
             <FuelPage
               meals={meals}
@@ -2255,7 +2326,7 @@ export default function App() {
                 </AnimatePresence>
               </div>
             </motion.div>
-          ) : (
+          ) : isFuel ? (
             /* ======================================================== */
             /* FUEL / CALORIE COUNTER PAGE                              */
             /* ======================================================== */
@@ -2300,16 +2371,55 @@ export default function App() {
                 onSelectDate={setSelectedFuelDate}
               />
             </motion.div>
-          )}
+          ) : isVocab ? (
+            /* ======================================================== */
+            /* VOCAB / ENGLISH LEARNING PAGE                            */
+            /* ======================================================== */
+            <motion.div
+              key="page-vocab"
+              custom={pageDirection}
+              variants={{
+                enter: (dir: number) => ({
+                  x: dir > 0 ? 60 : -60,
+                  opacity: 0,
+                }),
+                center: {
+                  x: 0,
+                  opacity: 1,
+                },
+                exit: (dir: number) => ({
+                  x: dir < 0 ? 60 : -60,
+                  opacity: 0,
+                }),
+              }}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{
+                x: { type: 'spring', stiffness: 220, damping: 28, mass: 0.8 },
+                opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+              }}
+              className="w-full"
+            >
+              <LanguagePage
+                cards={vocabCards}
+                onAddCard={handleAddVocabCard}
+                onUpdateCard={handleUpdateVocabCard}
+                onDeleteCard={handleDeleteVocabCard}
+                showNotification={showNotification}
+                onOpenBackup={() => setIsBackupOpen(true)}
+              />
+            </motion.div>
+          ) : null}
         </AnimatePresence>
         )}
       </main>
 
-      {/* Floating Navigation Dock: Welcome (Workspace) -> Prompts -> Checklist (Tasks) -> Fuel (Flame) */}
+      {/* Floating Navigation Dock: Welcome (Workspace) -> Prompts -> Checklist (Tasks) -> Fuel (Flame) -> Idioma (Languages) */}
       <nav
         id="floating-dock-nav"
         aria-label="Navegação de Páginas"
-        className="fixed bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 hidden sm:flex items-center gap-2 sm:gap-1.5 p-2 sm:p-1.5 rounded-2xl sm:rounded-xl bg-[#0e0e0e] border border-[#202025] shadow-[0_12px_40px_rgba(0,0,0,0.9)] backdrop-blur-md"
+        className="fixed bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-1.5 p-2 sm:p-1.5 rounded-2xl sm:rounded-xl bg-[#0e0e0e] border border-[#202025] shadow-[0_12px_40px_rgba(0,0,0,0.9)] backdrop-blur-md"
       >
         {/* Tab 1: Welcome / Workspace */}
         <button
@@ -2422,6 +2532,34 @@ export default function App() {
             }`}
           />
         </button>
+
+        {/* Tab 5: Language / Idioma (Globe icon) */}
+        <button
+          type="button"
+          id="dock-tab-vocab"
+          onClick={() => handleNavigate('vocab')}
+          className="relative p-2.5 sm:p-2 rounded-xl sm:rounded-lg cursor-pointer flex items-center justify-center select-none"
+          title="Inglês / Vocabulário"
+        >
+          {currentPage === 'vocab' && (
+            <motion.div
+              layoutId="dock-active-indicator"
+              animate={{ opacity: showDockIndicator ? 1 : 0 }}
+              transition={{
+                layout: { type: 'spring', stiffness: 350, damping: 30 },
+                opacity: { duration: 0.6 },
+              }}
+              className="absolute inset-0 bg-[#151518] border border-[#242429] rounded-xl sm:rounded-lg shadow-sm pointer-events-none"
+            />
+          )}
+          <Globe
+            className={`relative z-10 w-5 h-5 sm:w-4 sm:h-4 transition-all duration-300 ${
+              currentPage === 'vocab'
+                ? 'text-white opacity-100'
+                : 'text-zinc-500 opacity-60 hover:text-zinc-300 hover:opacity-90'
+            }`}
+          />
+        </button>
       </nav>
 
       {/* Interactive Variable Prompt Modal */}
@@ -2480,7 +2618,7 @@ export default function App() {
         onDeleteSubtask={handleDeleteSubtask}
       />
 
-      {/* Cloud Backup / Restore Modal (Supports prompts, tasks, projects, workflows and calories) */}
+      {/* Cloud Backup / Restore Modal (Supports prompts, tasks, projects, workflows, calories and vocab) */}
       <BackupModal
         isOpen={isBackupOpen}
         onClose={() => setIsBackupOpen(false)}
@@ -2492,12 +2630,14 @@ export default function App() {
         meals={meals}
         fuelData={fuelData}
         baseCalorieGoal={baseCalorieGoal}
+        vocabCards={vocabCards}
         onImportPrompts={handleImportPrompts}
         onImportTasks={handleImportTasks}
         onImportAll={handleImportAll}
         onImportProjects={handleImportProjects}
         onImportWorkflows={handleImportWorkflows}
         onImportFuel={handleImportFuel}
+        onImportVocab={handleImportVocab}
       />
 
       {/* Modal de Confirmação: Excluir Todos os Dados do Site */}
@@ -2540,9 +2680,12 @@ export default function App() {
                     setPrompts([]);
                     setTasks([]);
                     setSavedProjects([]);
+                    setVocabCards([]);
                     localStorage.removeItem(PROMPTS_STORAGE_KEY);
                     localStorage.removeItem(TASKS_STORAGE_KEY);
                     localStorage.removeItem(PROJECTS_STORAGE_KEY);
+                    localStorage.removeItem(VOCAB_STORAGE_KEY);
+                    persistentStorage.removeItem(VOCAB_STORAGE_KEY);
                     setIsWipeModalOpen(false);
                     showNotification('Todos os dados foram excluídos permanentemente.');
                   }}
