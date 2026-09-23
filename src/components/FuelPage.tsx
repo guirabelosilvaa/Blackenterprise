@@ -10,6 +10,10 @@ import {
   Trash2,
   Check,
   Plus,
+  Dumbbell,
+  Activity,
+  HeartPulse,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { MealItem, DayFuelData } from '../types';
 
@@ -40,6 +44,21 @@ const getDayOfWeekShort = (dateStr: string) => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const d = new Date(year, month - 1, day);
   const days = [
+    'Dom',
+    'Seg',
+    'Ter',
+    'Qua',
+    'Qui',
+    'Sex',
+    'Sáb',
+  ];
+  return days[d.getDay()] || '';
+};
+
+const getDayOfWeekName = (dateStr: string) => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  const days = [
     'Domingo',
     'Segunda',
     'Terça',
@@ -50,8 +69,6 @@ const getDayOfWeekShort = (dateStr: string) => {
   ];
   return days[d.getDay()] || '';
 };
-
-const getDayOfWeekName = getDayOfWeekShort;
 
 const formatDateShort = (dateStr: string) => {
   const parts = dateStr.split('-');
@@ -64,7 +81,7 @@ const formatDateShort = (dateStr: string) => {
 const formatDateWithDay = (dateStr: string) => {
   const shortDate = formatDateShort(dateStr);
   const dayName = getDayOfWeekShort(dateStr);
-  return `${shortDate} . ${dayName}`;
+  return `${shortDate} ${dayName}`;
 };
 
 // Formatação inteligente de calorias:
@@ -260,6 +277,7 @@ export const FuelPage: React.FC<FuelPageProps> = ({
   const mainCard = useCardTiltEffect(2.0);
   const workoutCard = useCardTiltEffect(2.5);
   const cardioCard = useCardTiltEffect(2.5);
+  const foodCard = useCardTiltEffect(2.5);
 
   // Open Step 1 (Numeric Calorie popup as requested in screenshot)
   const handleOpenAddMeal = () => {
@@ -415,10 +433,10 @@ export const FuelPage: React.FC<FuelPageProps> = ({
     showNotification('Compartilhando...');
   };
 
-  // Circular gauge calculations
+  // Circular gauge calculations: soma das calorias menos descontos de treino/cardio se marcados
   const radius = 92;
   const circumference = 2 * Math.PI * radius;
-  const progressRatio = Math.min(netCalories / baseCalorieGoal, 1);
+  const progressRatio = baseCalorieGoal > 0 ? Math.min(netCalories / baseCalorieGoal, 1) : 0;
   const strokeDashoffset = circumference - progressRatio * circumference;
 
   return (
@@ -478,33 +496,14 @@ export const FuelPage: React.FC<FuelPageProps> = ({
             />
 
             <div className="relative z-10 flex flex-col">
-              {/* Header Row: 🔥 Calories + status fina ao lado + Total de Calorias embaixo do label Calories + Seletor de Data */}
-              <div className="flex items-start justify-between">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base sm:text-lg">🔥</span>
-                    <span className="text-sm sm:text-base font-medium text-zinc-200 tracking-tight">
-                      Calories
-                    </span>
-                    <span
-                      className="text-xs sm:text-sm font-light tracking-wide transition-colors duration-300 ml-0.5"
-                      style={{
-                        color: statusConfig.color,
-                        textShadow: `0 0 12px ${statusConfig.glow}`,
-                      }}
-                    >
-                      {statusConfig.word}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-1 mt-1 pl-6 sm:pl-7">
-                    <span className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-none">
-                      {formatKcal(netCalories)}
-                    </span>
-                    <span className="text-xs text-zinc-400 font-medium">kcal</span>
-                  </div>
+              {/* Header Row: Meta diária + Seletor de Data */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xs sm:text-sm text-zinc-400 font-medium">Meta diária:</span>
+                  <span className="text-xs sm:text-sm font-semibold text-zinc-200">{baseCalorieGoal} kcal</span>
                 </div>
 
-                {/* Seletor de Data com formato: xx/xx . Dia (ex: 18/09 . Sexta) */}
+                {/* Seletor de Data com formato: xx/xx Dia (ex: 18/09 Sex) */}
                 <div
                   className="relative flex items-center"
                   onClick={(e) => e.stopPropagation()}
@@ -533,22 +532,41 @@ export const FuelPage: React.FC<FuelPageProps> = ({
               <div className="relative flex flex-col items-center justify-center my-6 sm:my-8 py-2">
                 <div className="relative w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center">
                   <svg className="w-full h-full" viewBox="0 0 240 240">
+                    <defs>
+                      {/* Degradê de vermelho para laranja para a barra de progresso */}
+                      <linearGradient id="calorieProgressGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#dc2626" />
+                        <stop offset="45%" stopColor="#ea580c" />
+                        <stop offset="100%" stopColor="#f97316" />
+                      </linearGradient>
+
+                      {/* Degradê de vermelho para laranja para o símbolo de fogo */}
+                      <linearGradient id="fireIconGradient" x1="0%" y1="100%" x2="0%" y2="0%">
+                        <stop offset="0%" stopColor="#dc2626" />
+                        <stop offset="45%" stopColor="#ea580c" />
+                        <stop offset="100%" stopColor="#f97316" />
+                      </linearGradient>
+                    </defs>
+
+                    {/* Círculo de fundo */}
                     <circle
                       cx="120"
                       cy="120"
                       r={radius}
                       fill="none"
-                      stroke="#1c1c20"
+                      stroke="#1c1c22"
                       strokeWidth="18"
                       className="transition-colors"
                     />
+
+                    {/* Círculo preenchido com degradê vermelho para laranja */}
                     <g transform="translate(240, 0) scale(-1, 1) rotate(-90 120 120)">
                       <circle
                         cx="120"
                         cy="120"
                         r={radius}
                         fill="none"
-                        stroke={statusConfig.color}
+                        stroke="url(#calorieProgressGradient)"
                         strokeWidth="18"
                         strokeLinecap="round"
                         strokeDasharray={circumference}
@@ -558,34 +576,96 @@ export const FuelPage: React.FC<FuelPageProps> = ({
                     </g>
                   </svg>
 
+                  {/* Centro: Símbolo de fire com degradê de vermelho para laranja + número menor + Calories */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none pointer-events-none px-4">
-                    <span className="font-sans font-semibold text-5xl sm:text-6xl text-white tracking-tight leading-none tabular-nums">
-                      {percentage}%
-                    </span>
-                    <div className="flex items-center gap-1 mt-2 text-xs sm:text-sm font-mono text-zinc-400">
-                      <span className="text-zinc-200 font-semibold">
-                        {formatKcal(consumedCalories)}
-                      </span>
-                      <span className="text-zinc-600">/</span>
-                      <span className="text-zinc-400">
-                        {formatKcal(baseCalorieGoal)} kcal
-                      </span>
+                    {/* Símbolo de Fogo com degradê de vermelho para laranja */}
+                    <div className="flex items-center justify-center mb-1">
+                      <svg
+                        className="w-9 h-9 sm:w-10 sm:h-10 drop-shadow-[0_0_14px_rgba(234,88,12,0.45)]"
+                        viewBox="0 0 24 24"
+                        fill="url(#fireIconGradient)"
+                        stroke="url(#fireIconGradient)"
+                        strokeWidth="0.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+                      </svg>
                     </div>
+
+                    {/* Número de calorias: soma das calorias menos descontos de treino/cardio se marcados */}
+                    <span className="font-sans font-bold text-3xl sm:text-4xl text-white tracking-tight leading-none tabular-nums">
+                      {netCalories}
+                    </span>
+                    <span className="text-xs sm:text-sm font-medium text-zinc-400 mt-1.5 tracking-wide">
+                      Calories
+                    </span>
                   </div>
                 </div>
-
-                {totalBurned > 0 && (
-                  <div className="mt-3 text-xs sm:text-sm font-mono text-zinc-400 select-none">
-                    <span className="text-zinc-300 font-normal">-{totalBurned} kcal gastas</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>
 
-          {/* 2. CARDS DE TREINO E CARDIO CLÁSSICOS COM 3D TILT */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
-            {/* Card 1: Treino */}
+          {/* 2. CARDS: FOOD (PRIMEIRO), EXERCISE, CARDIO */}
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+            {/* Card 1: Food (Em primeiro, sem o símbolo de +) */}
+            <div
+              id="btn-food-card"
+              ref={foodCard.ref}
+              onClick={handleOpenAddMeal}
+              onMouseMove={foodCard.handleMouseMove}
+              onMouseEnter={foodCard.handleMouseEnter}
+              onMouseLeave={foodCard.handleMouseLeave}
+              style={{
+                transform: foodCard.mouseCoords.isInteracting
+                  ? `perspective(1000px) rotateX(${foodCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${foodCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`
+                  : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
+                transition: foodCard.mouseCoords.isInteracting
+                  ? 'transform 0.08s ease-out'
+                  : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
+              }}
+              className="group relative flex flex-col items-center justify-center text-center p-3.5 sm:p-4 rounded-[20px] bg-[#121215] border border-[#1f1f24] hover:border-[#32323b] shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 cursor-pointer select-none active:scale-[0.98] preserve-3d overflow-hidden"
+              title="Toque para adicionar refeição"
+            >
+              <div
+                className="flashlight-layer absolute inset-0 rounded-[20px] p-[1px] pointer-events-none z-10"
+                style={{
+                  opacity: foodCard.mouseCoords.isInteracting ? 1 : 0,
+                  background: foodCard.mouseCoords.isInteracting
+                    ? `radial-gradient(220px circle at ${foodCard.mouseCoords.x}px ${foodCard.mouseCoords.y}px, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.04) 40%, transparent 75%)`
+                    : 'none',
+                  WebkitMask:
+                    'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  WebkitMaskComposite: 'xor',
+                  maskComposite: 'exclude',
+                }}
+              />
+              <div
+                className="flashlight-layer absolute inset-0 pointer-events-none rounded-[20px] z-0"
+                style={{
+                  opacity: foodCard.mouseCoords.isInteracting ? 1 : 0,
+                  background: foodCard.mouseCoords.isInteracting
+                    ? `radial-gradient(260px circle at ${foodCard.mouseCoords.x}px ${foodCard.mouseCoords.y}px, rgba(255, 255, 255, 0.03), transparent 75%)`
+                    : 'none',
+                }}
+              />
+              <div className="relative z-10 flex flex-col items-center justify-center text-center w-full py-0.5">
+                {/* Ícone reduzido no centro */}
+                <div className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center mb-1 text-zinc-400 group-hover:text-zinc-200 transition-colors">
+                  <UtensilsCrossed className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                </div>
+                {/* Título com tamanho mantido */}
+                <span className="text-xs sm:text-sm font-medium text-zinc-300 tracking-tight leading-tight">
+                  Food
+                </span>
+                {/* Calorias com o mesmo tamanho da fonte do título */}
+                <span className="text-xs sm:text-sm font-semibold text-white tracking-tight mt-1 leading-tight">
+                  {consumedCalories}
+                </span>
+              </div>
+            </div>
+
+            {/* Card 2: Exercise */}
             <div
               id="btn-toggle-workout"
               ref={workoutCard.ref}
@@ -595,14 +675,30 @@ export const FuelPage: React.FC<FuelPageProps> = ({
               onMouseLeave={workoutCard.handleMouseLeave}
               style={{
                 transform: workoutCard.mouseCoords.isInteracting
-                  ? `perspective(1000px) rotateX(${workoutCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${workoutCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.015, 1.015, 1.015)`
+                  ? `perspective(1000px) rotateX(${workoutCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${workoutCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`
                   : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
                 transition: workoutCard.mouseCoords.isInteracting
                   ? 'transform 0.08s ease-out'
                   : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
               }}
-              className="group relative flex flex-col justify-between p-4 sm:p-4.5 rounded-[20px] bg-[#121215] border border-[#1f1f24] hover:border-[#32323b] shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 cursor-pointer select-none active:scale-[0.99] preserve-3d overflow-hidden"
+              className="group relative flex flex-col items-center justify-center text-center p-3.5 sm:p-4 rounded-[20px] bg-[#121215] border border-[#1f1f24] hover:border-[#32323b] shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 cursor-pointer select-none active:scale-[0.98] preserve-3d overflow-hidden"
+              title="Toque para validar treino (-210 kcal)"
             >
+              {/* Check estilo Task no canto superior direito */}
+              <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 pointer-events-none z-20">
+                {isWorkoutDone ? (
+                  <motion.div
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full bg-emerald-500 border border-emerald-400 flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.45)]"
+                  >
+                    <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white stroke-[3.2]" />
+                  </motion.div>
+                ) : (
+                  <div className="w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full border border-[#4a4a52] group-hover:border-zinc-400 transition-colors bg-transparent" />
+                )}
+              </div>
+
               <div
                 className="flashlight-layer absolute inset-0 rounded-[20px] p-[1px] pointer-events-none z-10"
                 style={{
@@ -625,31 +721,23 @@ export const FuelPage: React.FC<FuelPageProps> = ({
                     : 'none',
                 }}
               />
-              <div className="relative z-10 flex flex-col justify-between h-full">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs sm:text-sm font-medium text-zinc-200 tracking-tight">
-                    Treino
-                  </span>
-                  <div className="w-4 h-4 flex items-center justify-end">
-                    {isWorkoutDone && (
-                      <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                    )}
-                  </div>
+              <div className="relative z-10 flex flex-col items-center justify-center text-center w-full py-0.5">
+                {/* Ícone reduzido no centro */}
+                <div className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center mb-1 text-zinc-400 group-hover:text-zinc-200 transition-colors">
+                  <Dumbbell className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                 </div>
-                <div className="flex items-end justify-between mt-4 pt-0.5">
-                  <div className="flex flex-col">
-                    <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
-                      {isWorkoutDone ? '210' : '0'}
-                    </span>
-                    <span className="text-[11px] font-mono text-zinc-400 font-medium mt-1">
-                      kcal
-                    </span>
-                  </div>
-                </div>
+                {/* Título com tamanho mantido */}
+                <span className="text-xs sm:text-sm font-medium text-zinc-300 tracking-tight leading-tight">
+                  Exercise
+                </span>
+                {/* Calorias com o mesmo tamanho da fonte do título */}
+                <span className="text-xs sm:text-sm font-semibold text-white tracking-tight mt-1 leading-tight">
+                  {isWorkoutDone ? '210' : '0'}
+                </span>
               </div>
             </div>
 
-            {/* Card 2: Cardio */}
+            {/* Card 3: Cardio (com outro emoji/ícone HeartPulse) */}
             <div
               id="btn-toggle-cardio"
               ref={cardioCard.ref}
@@ -659,14 +747,30 @@ export const FuelPage: React.FC<FuelPageProps> = ({
               onMouseLeave={cardioCard.handleMouseLeave}
               style={{
                 transform: cardioCard.mouseCoords.isInteracting
-                  ? `perspective(1000px) rotateX(${cardioCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${cardioCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.015, 1.015, 1.015)`
+                  ? `perspective(1000px) rotateX(${cardioCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${cardioCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`
                   : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
                 transition: cardioCard.mouseCoords.isInteracting
                   ? 'transform 0.08s ease-out'
                   : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
               }}
-              className="group relative flex flex-col justify-between p-4 sm:p-4.5 rounded-[20px] bg-[#121215] border border-[#1f1f24] hover:border-[#32323b] shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 cursor-pointer select-none active:scale-[0.99] preserve-3d overflow-hidden"
+              className="group relative flex flex-col items-center justify-center text-center p-3.5 sm:p-4 rounded-[20px] bg-[#121215] border border-[#1f1f24] hover:border-[#32323b] shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 cursor-pointer select-none active:scale-[0.98] preserve-3d overflow-hidden"
+              title="Toque para validar cardio (-200 kcal)"
             >
+              {/* Check estilo Task no canto superior direito */}
+              <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 pointer-events-none z-20">
+                {isCardioDone ? (
+                  <motion.div
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full bg-emerald-500 border border-emerald-400 flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.45)]"
+                  >
+                    <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white stroke-[3.2]" />
+                  </motion.div>
+                ) : (
+                  <div className="w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full border border-[#4a4a52] group-hover:border-zinc-400 transition-colors bg-transparent" />
+                )}
+              </div>
+
               <div
                 className="flashlight-layer absolute inset-0 rounded-[20px] p-[1px] pointer-events-none z-10"
                 style={{
@@ -689,34 +793,26 @@ export const FuelPage: React.FC<FuelPageProps> = ({
                     : 'none',
                 }}
               />
-              <div className="relative z-10 flex flex-col justify-between h-full">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs sm:text-sm font-medium text-zinc-200 tracking-tight">
-                    Cardio
-                  </span>
-                  <div className="w-4 h-4 flex items-center justify-end">
-                    {isCardioDone && (
-                      <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                    )}
-                  </div>
+              <div className="relative z-10 flex flex-col items-center justify-center text-center w-full py-0.5">
+                {/* Ícone reduzido no centro: HeartPulse */}
+                <div className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center mb-1 text-zinc-400 group-hover:text-zinc-200 transition-colors">
+                  <HeartPulse className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                 </div>
-                <div className="flex items-end justify-between mt-4 pt-0.5">
-                  <div className="flex flex-col">
-                    <span className="font-sans font-semibold text-2xl sm:text-3xl text-white tracking-tight leading-none">
-                      {isCardioDone ? '200' : '0'}
-                    </span>
-                    <span className="text-[11px] font-mono text-zinc-400 font-medium mt-1">
-                      kcal
-                    </span>
-                  </div>
-                </div>
+                {/* Título com tamanho mantido */}
+                <span className="text-xs sm:text-sm font-medium text-zinc-300 tracking-tight leading-tight">
+                  Cardio
+                </span>
+                {/* Calorias com o mesmo tamanho da fonte do título */}
+                <span className="text-xs sm:text-sm font-semibold text-white tracking-tight mt-1 leading-tight">
+                  {isCardioDone ? '200' : '0'}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* 3. HISTÓRICO DE REFEIÇÕES CLÁSSICO */}
+          {/* 3. HISTÓRICO DE REFEIÇÕES CLÁSSICO (com espaçamento aumentado) */}
           {dayMeals.length > 0 && (
-            <div className="flex flex-col gap-2.5 mt-1">
+            <div className="flex flex-col gap-2.5 mt-8 sm:mt-10">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-sm font-semibold text-zinc-200">
                   Historico
