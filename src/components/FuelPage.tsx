@@ -441,9 +441,11 @@ export const FuelPage: React.FC<FuelPageProps> = ({
 
   return (
     <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 animate-in fade-in duration-300">
-      {/* 1. TOP MAIN CARD: Clicável para Adicionar Refeição (Efeitos do PromptCard) */}
-          <div
-            ref={mainCard.ref}
+      {/* Bloco Superior: Círculo de Metas + 3 Cards (Food, Exercise, Cardio) que preenche a visualização inicial */}
+      <div className="flex flex-col gap-5 sm:gap-6 min-h-[calc(100svh-130px)] sm:min-h-[calc(100vh-140px)] justify-start pb-6">
+        {/* 1. TOP MAIN CARD: Clicável para Adicionar Refeição (Efeitos do PromptCard) */}
+        <div
+          ref={mainCard.ref}
             onClick={handleOpenAddMeal}
             onMouseMove={mainCard.handleMouseMove}
             onMouseEnter={mainCard.handleMouseEnter}
@@ -809,15 +811,16 @@ export const FuelPage: React.FC<FuelPageProps> = ({
               </div>
             </div>
           </div>
+        </div>
 
-          {/* 3. HISTÓRICO DE REFEIÇÕES CLÁSSICO (com espaçamento aumentado) */}
-          {dayMeals.length > 0 && (
-            <div className="flex flex-col gap-2.5 mt-8 sm:mt-10">
-              <div className="flex items-center justify-between px-1">
-                <h3 className="text-sm font-semibold text-zinc-200">
-                  Historico
-                </h3>
-              </div>
+        {/* 3. HISTÓRICO DE REFEIÇÕES CLÁSSICO (visível somente ao dar scroll) */}
+        {dayMeals.length > 0 && (
+          <div className="flex flex-col gap-2.5 mt-8 sm:mt-12 pt-2">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-sm font-semibold text-zinc-200">
+                Historico
+              </h3>
+            </div>
 
               <div className="flex flex-col gap-2">
                 {dayMeals.map((meal) => (

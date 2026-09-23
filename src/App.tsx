@@ -33,7 +33,6 @@ import {
   MessageSquare,
   Check,
   Flame,
-  Share2,
   Eye,
   Globe,
 } from 'lucide-react';
@@ -1787,19 +1786,6 @@ export default function App() {
                 title="Backup (Importar e Exportar dados)"
               >
                 <Cloud className="w-4 h-4 text-white" />
-              </button>
-            )}
-
-            {/* Símbolo de Compartilhar: Presente apenas na página de Calories */}
-            {isFuel && (
-              <button
-                id="btn-whatsapp-share-header"
-                type="button"
-                onClick={handleShareWhatsApp}
-                className="relative overflow-hidden group flex items-center justify-center p-2.5 sm:p-2 rounded-xl sm:rounded-lg text-white hover:text-white bg-[#151518] hover:bg-[#1f1f24] border border-[#242429] transition-all duration-300 shadow-sm cursor-pointer shrink-0"
-                title="Compartilhar resumo no WhatsApp"
-              >
-                <Share2 className="w-4 h-4 text-white" />
               </button>
             )}
 
