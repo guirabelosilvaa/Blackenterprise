@@ -13,6 +13,7 @@ import {
   Activity,
   HeartPulse,
   UtensilsCrossed,
+  History,
 } from 'lucide-react';
 import { MealItem, DayFuelData } from '../types';
 
@@ -303,6 +304,7 @@ export const FuelPage: React.FC<FuelPageProps> = ({
   const workoutCard = useCardTiltEffect(2.5);
   const cardioCard = useCardTiltEffect(2.5);
   const foodCard = useCardTiltEffect(2.5);
+  const historyCard = useCardTiltEffect(2.5);
 
   // Open Step 1 (Numeric Calorie popup as requested in screenshot)
   const handleOpenAddMeal = () => {
@@ -844,6 +846,60 @@ export const FuelPage: React.FC<FuelPageProps> = ({
               </div>
             </div>
           </div>
+
+          {/* BOTÃO/CARD DE HISTÓRICO: centralizado embaixo dos 3 cards, mais comprido, símbolo e texto na mesma linha */}
+          <div className="flex justify-center w-full mt-1 sm:mt-1.5">
+            <div
+              id="btn-fuel-history"
+              ref={historyCard.ref}
+              onClick={() => setIsMobileDrawerOpen(true)}
+              onMouseMove={historyCard.handleMouseMove}
+              onMouseEnter={historyCard.handleMouseEnter}
+              onMouseLeave={historyCard.handleMouseLeave}
+              style={{
+                transform: historyCard.mouseCoords.isInteracting
+                  ? `perspective(1000px) rotateX(${historyCard.mouseCoords.rotateX.toFixed(2)}deg) rotateY(${historyCard.mouseCoords.rotateY.toFixed(2)}deg) scale3d(1.02, 1.02, 1.02)`
+                  : 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
+                transition: historyCard.mouseCoords.isInteracting
+                  ? 'transform 0.08s ease-out'
+                  : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease-out',
+                width: '160px',
+                borderWidth: '0.11111px',
+                borderRadius: '12px',
+              }}
+              className="group relative flex items-center justify-center py-3 sm:py-3.5 px-6 rounded-[12px] bg-[#121215] border border-[#1f1f24] hover:border-[#32323b] shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 cursor-pointer select-none active:scale-[0.98] preserve-3d overflow-hidden w-[160px]"
+              title="Ver histórico de refeições"
+            >
+              <div
+                className="flashlight-layer absolute inset-0 rounded-[12px] p-[1px] pointer-events-none z-10"
+                style={{
+                  opacity: historyCard.mouseCoords.isInteracting ? 1 : 0,
+                  background: historyCard.mouseCoords.isInteracting
+                    ? `radial-gradient(220px circle at ${historyCard.mouseCoords.x}px ${historyCard.mouseCoords.y}px, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.04) 40%, transparent 75%)`
+                    : 'none',
+                  WebkitMask:
+                    'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  WebkitMaskComposite: 'xor',
+                  maskComposite: 'exclude',
+                }}
+              />
+              <div
+                className="flashlight-layer absolute inset-0 pointer-events-none rounded-[12px] z-0"
+                style={{
+                  opacity: historyCard.mouseCoords.isInteracting ? 1 : 0,
+                  background: historyCard.mouseCoords.isInteracting
+                    ? `radial-gradient(260px circle at ${historyCard.mouseCoords.x}px ${historyCard.mouseCoords.y}px, rgba(255, 255, 255, 0.03), transparent 75%)`
+                    : 'none',
+                }}
+              />
+              <div className="relative z-10 flex items-center justify-center gap-2 sm:gap-2.5 py-0.5">
+                <History className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-zinc-400 group-hover:text-zinc-200 transition-colors" />
+                <span className="text-xs sm:text-sm font-medium text-zinc-300 group-hover:text-white tracking-tight leading-tight transition-colors">
+                  Histórico
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* 3. REFEIÇÕES NO DESKTOP (visível somente ao dar scroll) */}
@@ -910,138 +966,142 @@ export const FuelPage: React.FC<FuelPageProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* BARRA ARRASTÁVEL DE HISTÓRICO NO CELULAR (Substitui a barra de tarefas)    */}
+        {/* GAVETA DE HISTÓRICO: Quando fechada, NADA aparece na tela.                */}
+        {/* Abre quando o usuário toca no botão/card 'Histórico'                      */}
         {/* ========================================================================= */}
-        {isMobileView && (
-          <>
-            {/* Backdrop escuro quando a gaveta de histórico estiver aberta */}
-            <AnimatePresence>
-              {isMobileDrawerOpen && (
-                <motion.div
-                  key="drawer-backdrop"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  onClick={() => setIsMobileDrawerOpen(false)}
-                  className="fixed inset-0 z-40 bg-black/75 backdrop-blur-xs"
-                />
-              )}
-            </AnimatePresence>
+        <AnimatePresence>
+          {isMobileDrawerOpen && (
+            <>
+              {/* Backdrop escuro quando a gaveta de histórico estiver aberta */}
+              <motion.div
+                key="drawer-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setIsMobileDrawerOpen(false)}
+                className="fixed inset-0 z-40 bg-black/75 backdrop-blur-xs"
+              />
 
-            {/* Barra / Gaveta inferior arrastável fixa embaixo */}
-            <motion.div
-              key="mobile-drawer-sheet"
-              drag="y"
-              dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={{ top: 0.05, bottom: 0.15 }}
-              onDragEnd={(_e, info) => {
-                if (info.offset.y < -30 || info.velocity.y < -200) {
-                  setIsMobileDrawerOpen(true);
-                } else if (info.offset.y > 30 || info.velocity.y > 200) {
-                  setIsMobileDrawerOpen(false);
-                }
-              }}
-              animate={{
-                y: isMobileDrawerOpen ? 0 : 'calc(100% - 22px)',
-              }}
-              transition={{
-                type: 'spring',
-                stiffness: 400,
-                damping: 35,
-              }}
-              className="fixed bottom-0 left-0 right-0 z-50 h-[82vh] rounded-t-[20px] bg-[#121215] border-t border-[#26262e] shadow-[0_-12px_40px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden"
-            >
-              {/* Alça superior: fechada NÃO aparece NADA, nenhuma informação, apenas a barrinha */}
-              <div
-                onClick={() => setIsMobileDrawerOpen((prev) => !prev)}
-                className="w-full h-[22px] flex items-center justify-center cursor-pointer select-none shrink-0 bg-[#121215] active:bg-[#16161a] transition-colors"
+              {/* Barra / Gaveta inferior arrastável */}
+              <motion.div
+                key="mobile-drawer-sheet"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 380,
+                  damping: 34,
+                }}
+                drag="y"
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0.05, bottom: 0.25 }}
+                onDragEnd={(_e, info) => {
+                  if (info.offset.y > 60 || info.velocity.y > 250) {
+                    setIsMobileDrawerOpen(false);
+                  }
+                }}
+                className="fixed bottom-0 left-0 right-0 sm:max-w-xl sm:mx-auto z-50 h-[82vh] rounded-t-[20px] bg-[#121215] border-t sm:border-x border-[#26262e] shadow-[0_-12px_40px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden"
               >
-                {/* Barrinha indicadora estilizada conforme solicitado (width: 120px, height: 1.98958px, border-radius: 8.72827px) */}
+                {/* Alça superior para puxar ou clicar para fechar */}
                 <div
-                  className="bg-zinc-500 hover:bg-zinc-400 transition-colors shrink-0"
+                  onClick={() => setIsMobileDrawerOpen(false)}
+                  className="w-full flex items-center justify-center cursor-pointer select-none shrink-0 bg-[#121215] active:bg-[#16161a] transition-colors"
                   style={{
-                    width: '120px',
-                    height: '1.98958px',
-                    borderRadius: '8.72827px',
+                    paddingLeft: '0px',
+                    paddingRight: '0px',
+                    paddingTop: '15px',
+                    paddingBottom: '15px',
                   }}
-                />
-              </div>
+                  title="Fechar histórico"
+                >
+                  {/* Barrinha indicadora estilizada conforme solicitado (width: 130px, height: 3.97917px, border-radius: 8.72827px) */}
+                  <div
+                    className="bg-zinc-500 hover:bg-zinc-400 transition-colors shrink-0"
+                    style={{
+                      width: '130px',
+                      height: '3.97917px',
+                      borderRadius: '8.72827px',
+                    }}
+                  />
+                </div>
 
-              {/* Conteúdo da gaveta: apenas as refeições (se não tiver refeição, fica vazia) */}
-              <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3 overscroll-contain">
-                {dayMeals.length > 0 ? (
-                  <>
-                    <div className="flex flex-col gap-2">
-                      {dayMeals.map((meal) => (
-                        <div
-                          key={meal.id}
+                {/* Conteúdo da gaveta: apenas as refeições (se não tiver refeição, fica vazia) */}
+                <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3 overscroll-contain">
+                  {dayMeals.length > 0 ? (
+                    <>
+                      <div className="flex flex-col gap-2">
+                        {dayMeals.map((meal) => (
+                          <div
+                            key={meal.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditMeal(meal);
+                            }}
+                            className="group relative flex items-center justify-between p-3.5 rounded-2xl bg-[#16161a] border border-[#24242c] active:border-zinc-400 transition-all shadow-sm cursor-pointer"
+                            title="Toque para editar ou excluir"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 pr-3">
+                              {/* Símbolo de comida na frente de cada refeição sem cor e sem quadrado */}
+                              <UtensilsCrossed className="w-4 h-4 text-zinc-400 shrink-0" />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-medium text-white tracking-tight truncate">
+                                  {meal.name}
+                                </span>
+                                {meal.time && (
+                                  <div className="flex items-center gap-1.5 mt-0.5 text-xs text-zinc-400">
+                                    <Clock className="w-3 h-3 text-zinc-500" />
+                                    <span className="font-mono text-[11px] text-zinc-400">{meal.time}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <span className="px-2.5 py-1 rounded-lg bg-[#202028] border border-[#30303c] font-mono text-xs font-semibold text-white shrink-0">
+                              {meal.calories} kcal
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Ações inferiores na gaveta: Compartilhar e Limpar */}
+                      <div className="flex items-center justify-center gap-3 pt-4 pb-8 mt-2 border-t border-[#1c1c22]">
+                        <button
+                          type="button"
+                          id="btn-fuel-share-whatsapp-mobile"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleOpenEditMeal(meal);
+                            handleShareWhatsApp();
                           }}
-                          className="group relative flex items-center justify-between p-3.5 rounded-2xl bg-[#16161a] border border-[#24242c] active:border-zinc-400 transition-all shadow-sm cursor-pointer"
-                          title="Toque para editar ou excluir"
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#18181d] active:bg-[#22222a] border border-[#282832] active:border-[#383842] text-zinc-200 active:text-white text-xs font-medium transition-all active:scale-98 shadow-sm cursor-pointer"
+                          title="Compartilhar resumo"
                         >
-                          <div className="flex items-center gap-2.5 min-w-0 pr-3">
-                            {/* Símbolo de comida na frente de cada refeição sem cor e sem quadrado */}
-                            <UtensilsCrossed className="w-4 h-4 text-zinc-400 shrink-0" />
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-sm font-medium text-white tracking-tight truncate">
-                                {meal.name}
-                              </span>
-                              {meal.time && (
-                                <div className="flex items-center gap-1.5 mt-0.5 text-xs text-zinc-400">
-                                  <Clock className="w-3 h-3 text-zinc-500" />
-                                  <span className="font-mono text-[11px] text-zinc-400">{meal.time}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                          <Share2 className="w-4 h-4 text-white" />
+                          <span>Compartilhar</span>
+                        </button>
 
-                          <span className="px-2.5 py-1 rounded-lg bg-[#202028] border border-[#30303c] font-mono text-xs font-semibold text-white shrink-0">
-                            {meal.calories} kcal
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Ações inferiores na gaveta: Compartilhar e Limpar */}
-                    <div className="flex items-center justify-center gap-3 pt-4 pb-8 mt-2 border-t border-[#1c1c22]">
-                      <button
-                        type="button"
-                        id="btn-fuel-share-whatsapp-mobile"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleShareWhatsApp();
-                        }}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#18181d] active:bg-[#22222a] border border-[#282832] active:border-[#383842] text-zinc-200 active:text-white text-xs font-medium transition-all active:scale-98 shadow-sm cursor-pointer"
-                        title="Compartilhar resumo"
-                      >
-                        <Share2 className="w-4 h-4 text-white" />
-                        <span>Compartilhar</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        id="btn-fuel-clear-day-mobile"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsClearConfirmOpen(true);
-                        }}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#18181d] active:bg-red-950/30 border border-[#282832] active:border-red-900/40 text-zinc-400 active:text-red-400 text-xs font-medium transition-all active:scale-98 shadow-sm cursor-pointer"
-                        title="Limpar dia"
-                      >
-                        <RotateCcw className="w-4 h-4 text-zinc-400" />
-                        <span>Limpar</span>
-                      </button>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            </motion.div>
-          </>
-        )}
+                        <button
+                          type="button"
+                          id="btn-fuel-clear-day-mobile"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsClearConfirmOpen(true);
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#18181d] active:bg-red-950/30 border border-[#282832] active:border-red-900/40 text-zinc-400 active:text-red-400 text-xs font-medium transition-all active:scale-98 shadow-sm cursor-pointer"
+                          title="Limpar dia"
+                        >
+                          <RotateCcw className="w-4 h-4 text-zinc-400" />
+                          <span>Limpar</span>
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
       {/* ========================================================================= */}
       {/* POPUP STEP 1: DIGITAR APENAS O VALOR DAS CALORIAS (Layout da imagem)      */}
