@@ -107,27 +107,22 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         workflows: p.workflows || [],
         workflowSteps: p.workflowSteps || {},
       })),
-      tasks: tasks.map((t) => {
-        const isDaily = t.taskType === 'daily' || !t.date;
-        return {
-          id: t.id,
-          title: t.title,
-          date: isDaily ? '' : (t.date || ''),
-          project: isDaily ? '' : (t.project || ''),
-          completed: !!t.completed,
-          taskType: isDaily ? 'daily' : 'business',
-          time: t.time || '',
-          notes: t.notes || '',
-          urgent: !!t.urgent,
-          subtasks: Array.isArray(t.subtasks)
-            ? t.subtasks.map((s) => ({
-                id: s.id,
-                title: s.title,
-                completed: !!s.completed,
-              }))
-            : [],
-        };
-      }),
+      tasks: tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        project: t.project || '',
+        completed: !!t.completed,
+        notes: t.notes || '',
+        urgent: !!t.urgent,
+        createdAt: t.createdAt || Date.now(),
+        subtasks: Array.isArray(t.subtasks)
+          ? t.subtasks.map((s) => ({
+              id: s.id,
+              title: s.title,
+              completed: !!s.completed,
+            }))
+          : [],
+      })),
       meals: meals.map((m) => ({
         id: m.id,
         name: m.name,
@@ -376,27 +371,10 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     return list
       .filter((item) => item && typeof item === 'object' && (item.title || item.titulo || item.task))
       .map((item, index) => {
-        const rawType = String(item.taskType || item.type || '').toLowerCase().trim();
-        const isDaily =
-          rawType === 'daily' ||
-          rawType === 'diaria' ||
-          rawType === 'diária' ||
-          (!item.date && !item.data && !item.project && !item.projeto);
-
-        const projectVal = isDaily
-          ? undefined
-          : item.project
+        const projectVal = item.project
           ? String(item.project).trim()
           : item.projeto
           ? String(item.projeto).trim()
-          : undefined;
-
-        const timeVal = item.time
-          ? String(item.time).trim()
-          : item.horario
-          ? String(item.horario).trim()
-          : item.hour
-          ? String(item.hour).trim()
           : undefined;
 
         const notesVal = item.notes
@@ -406,8 +384,6 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           : item.observacao
           ? String(item.observacao).trim()
           : undefined;
-
-        const rawDate = item.date !== undefined ? item.date : item.data;
 
         // Subtasks parsing (suporta subtasks, subtarefas, sub_tasks, subTasks)
         const rawSubtasks = item.subtasks ?? item.subtarefas ?? item.sub_tasks ?? item.subTasks;
@@ -434,13 +410,11 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         return {
           id: item.id ? String(item.id) : `task-imp-${Date.now()}-${index}`,
           title: String(item.title || item.titulo || item.task).trim(),
-          date: isDaily ? '' : String(rawDate || ''),
           project: projectVal,
           completed: Boolean(item.completed || item.concluido),
-          taskType: (isDaily ? 'daily' : 'business') as 'daily' | 'business',
-          time: timeVal,
           notes: notesVal,
           urgent: Boolean(item.urgent || item.urgente),
+          createdAt: typeof item.createdAt === 'number' ? item.createdAt : Date.now() - (list.length - index) * 1000,
           subtasks: subtasks && subtasks.length > 0 ? subtasks : undefined,
         };
       });

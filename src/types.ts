@@ -58,14 +58,15 @@ export interface SubtaskItem {
 export interface TaskItem {
   id: string;
   title: string; // Nome da Tarefa
-  date: string; // Formato YYYY-MM-DD
+  date?: string; // Opcional/legado
   project?: string; // Nome do projeto associado
   notes?: string; // Observações / notas adicionais (ex: "obs: ligar antes")
-  time?: string; // Horário opcional para tarefas diárias (ex: "14:00")
+  time?: string; // Horário opcional legado
   completed?: boolean;
-  taskType?: TaskCategoryType; // 'daily' (diária/pessoal) ou 'business' (negócios)
+  taskType?: TaskCategoryType; // Legado
   urgent?: boolean; // Tarefa urgente (foguinho vermelho)
-  subtasks?: SubtaskItem[]; // Subtarefas (apenas tarefas black / business)
+  subtasks?: SubtaskItem[]; // Subtarefas
+  createdAt?: number; // Timestamp de criação para limitar concluídas
 }
 
 export interface MealItem {

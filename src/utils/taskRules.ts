@@ -1,36 +1,41 @@
 import { TaskItem } from '../types';
 
 /**
- * Checks if a date string (YYYY-MM-DD) is within the allowed window:
- * between 2 days ago and 7 days ahead from today.
+ * Enforces the rule that there can be at most 15 completed tasks.
+ * If there are more than 15 completed tasks, the oldest created ones are deleted.
+ * Non-completed tasks are always preserved.
  */
-export const isDateWithinTaskWindow = (dateStr: string): boolean => {
-  if (!dateStr) return false;
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const [y, m, d] = dateStr.split('-').map(Number);
-    if (!y || !m || !d) return false;
-
-    const target = new Date(y, m - 1, d);
-    target.setHours(0, 0, 0, 0);
-
-    const diffDays = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    // -2 <= diffDays <= 7
-    return diffDays >= -2 && diffDays <= 7;
-  } catch {
-    return false;
+export const enforceMaxCompletedTasks = (tasks: TaskItem[]): TaskItem[] => {
+  const completedTasks = tasks.filter((t) => t.completed);
+  if (completedTasks.length <= 15) {
+    return tasks;
   }
+
+  // Get timestamp or index for sorting
+  const getTaskTimestamp = (task: TaskItem, index: number): number => {
+    if (typeof task.createdAt === 'number') return task.createdAt;
+    const match = task.id.match(/\d{10,14}/);
+    if (match) return parseInt(match[0], 10);
+    return index;
+  };
+
+  // Sort completed tasks by creation time ascending (oldest created first)
+  const sortedCompleted = [...completedTasks].sort((a, b) => {
+    const aTime = getTaskTimestamp(a, tasks.indexOf(a));
+    const bTime = getTaskTimestamp(b, tasks.indexOf(b));
+    return aTime - bTime;
+  });
+
+  const excessCount = completedTasks.length - 15;
+  const toDeleteIds = new Set(sortedCompleted.slice(0, excessCount).map((t) => t.id));
+
+  return tasks.filter((t) => !toDeleteIds.has(t.id));
 };
 
 /**
- * Filters a list of tasks keeping only those within [-2 days, +7 days].
- * Daily tasks do not have fixed dates and are always preserved.
+ * Tasks no longer filter by dates. Enforces max 15 completed tasks.
  */
 export const filterTasksWithinWindow = (tasks: TaskItem[]): TaskItem[] => {
-  return tasks.filter((t) => {
-    if (t.taskType === 'daily' || !t.date) return true;
-    return isDateWithinTaskWindow(t.date);
-  });
+  return enforceMaxCompletedTasks(tasks);
 };
+

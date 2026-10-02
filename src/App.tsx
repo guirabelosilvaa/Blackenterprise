@@ -1,16 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PromptItem, TaskItem, TaskCategoryType, MealItem, DayFuelData } from './types';
+import { PromptItem, TaskItem, MealItem, DayFuelData } from './types';
 import { PromptCard } from './components/PromptCard';
 import { PromptModal } from './components/PromptModal';
 import { NewPromptModal } from './components/NewPromptModal';
 import { TaskCard } from './components/TaskCard';
 import { NewTaskModal } from './components/NewTaskModal';
 import { SubtasksModal } from './components/SubtasksModal';
-import { WeekTaskbar } from './components/WeekTaskbar';
 import { BackupModal } from './components/BackupModal';
 import { FuelPage } from './components/FuelPage';
-import { filterTasksWithinWindow } from './utils/taskRules';
+import { enforceMaxCompletedTasks } from './utils/taskRules';
 import { persistentStorage } from './utils/cookieStorage';
 import {
   Image as ImageIcon,
@@ -39,22 +38,12 @@ const PROMPTS_STORAGE_KEY = 'promptvault_user_prompts_v3';
 const TASKS_STORAGE_KEY = 'promptvault_user_tasks_v3';
 const PROJECTS_STORAGE_KEY = 'promptvault_user_projects_v1';
 const WORKFLOWS_STORAGE_KEY = 'promptvault_user_workflows_v1';
-const TASK_TYPE_STORAGE_KEY = 'promptvault_user_task_type_v1';
 const MEALS_STORAGE_KEY = 'promptvault_user_meals_v1';
 const CALORIE_GOAL_STORAGE_KEY = 'promptvault_user_calorie_goal_v1';
 const FUEL_DATA_STORAGE_KEY = 'promptvault_user_fuel_data_v1';
 
 const getTodayIso = () => {
   const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const getUpcomingIso = (daysAhead: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -68,48 +57,30 @@ const INITIAL_TASKS: TaskItem[] = [
   {
     id: 'task-init-1',
     title: 'Criar novo conceito visual para campanha',
-    date: getTodayIso(),
     project: 'Marketing',
     completed: false,
-    taskType: 'business',
+    createdAt: Date.now() - 300000,
   },
   {
     id: 'task-init-2',
     title: 'Gravar roteiro do anúncio e editar cortes dinâmicos',
-    date: getTodayIso(),
     project: 'Conteúdo',
     completed: false,
-    taskType: 'business',
+    createdAt: Date.now() - 200000,
   },
   {
     id: 'task-init-3',
     title: 'Gerar variações de criativos para teste de engajamento',
-    date: getUpcomingIso(1),
     project: 'Marketing',
     completed: false,
-    taskType: 'business',
+    createdAt: Date.now() - 100000,
   },
   {
     id: 'task-init-4',
     title: 'Revisar entrega final e programar publicação',
-    date: getUpcomingIso(2),
     project: 'Design',
     completed: false,
-    taskType: 'business',
-  },
-  {
-    id: 'task-daily-1',
-    title: 'Responder mensagens e emails prioritários',
-    date: '',
-    completed: false,
-    taskType: 'daily',
-  },
-  {
-    id: 'task-daily-2',
-    title: 'Alinhar entregas da esteira de produção',
-    date: '',
-    completed: false,
-    taskType: 'daily',
+    createdAt: Date.now(),
   },
 ];
 
@@ -167,10 +138,10 @@ const AgentProjectPill: React.FC<AgentProjectPillProps> = ({
       onClick={onSelect}
       className={`group relative overflow-hidden rounded-xl cursor-pointer select-none transition-all duration-200 text-xs font-medium px-3.5 py-1.5 ${
         isSelected
-          ? 'z-20 opacity-100 scale-[1.02] bg-[#1a1a20] border border-zinc-400 text-white font-semibold shadow-[0_4px_20px_rgba(0,0,0,0.8),0_0_16px_rgba(255,255,255,0.08)]'
+          ? 'z-20 opacity-85 scale-[1.01] bg-[#1a1a20]/90 border border-zinc-400/80 text-white font-medium shadow-[0_4px_16px_rgba(0,0,0,0.6)]'
           : isDimmed
-          ? 'opacity-35 bg-[#141416] border border-[#222226] text-zinc-500 hover:opacity-75 hover:text-zinc-300'
-          : 'opacity-100 bg-[#141416] border border-[#222226] hover:border-[#383844] text-zinc-300 hover:text-white shadow-[0_4px_16px_rgba(0,0,0,0.45)]'
+          ? 'opacity-30 bg-[#141416]/60 border border-[#222226]/80 text-zinc-500 hover:opacity-75 hover:text-zinc-300'
+          : 'opacity-60 hover:opacity-90 bg-[#141416]/80 border border-[#222226]/80 hover:border-[#383844] text-zinc-400 hover:text-white shadow-[0_4px_16px_rgba(0,0,0,0.45)]'
       }`}
       title={
         isSelected
@@ -363,86 +334,43 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleGlobalClick);
   }, [isProjectDropdownOpen]);
 
-  // Task Category: 'business' (Briefcase) as default, vs 'daily' (User)
-  const [taskCategory, setTaskCategory] = useState<TaskCategoryType>(() => {
-    try {
-      const saved = localStorage.getItem(TASK_TYPE_STORAGE_KEY);
-      if (saved === 'business' || saved === 'daily') return saved;
-    } catch {
-      // Fallback
-    }
-    return 'business';
-  });
-
-  const handleToggleTaskCategory = () => {
-    const nextCategory: TaskCategoryType = taskCategory === 'business' ? 'daily' : 'business';
-    setTaskCategory(nextCategory);
-    setLastResetCheckedTaskIds(null);
-    try {
-      localStorage.setItem(TASK_TYPE_STORAGE_KEY, nextCategory);
-    } catch {
-      // Fallback
-    }
-  };
-
   // Stores task IDs that had their check removed, allowing one-click restore if clicked again
   const [lastResetCheckedTaskIds, setLastResetCheckedTaskIds] = useState<string[] | null>(null);
 
-  // Reset checks for tasks of current category (with undo toggle)
+  // Reset checks for tasks (with undo toggle)
   const handleResetCurrentCategoryChecks = () => {
     // If user already clicked and un-checked tasks, clicking again restores those checks!
     if (lastResetCheckedTaskIds && lastResetCheckedTaskIds.length > 0) {
       const restoreSet = new Set(lastResetCheckedTaskIds);
-      setTasks((prevTasks) => {
-        const updated = prevTasks.map((t) => {
-          if (restoreSet.has(t.id)) {
-            return { ...t, completed: true };
-          }
-          return t;
-        });
-        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updated));
-        return updated;
+      const updated = tasks.map((t) => {
+        if (restoreSet.has(t.id)) {
+          return { ...t, completed: true };
+        }
+        return t;
       });
+      saveTasks(updated);
       setLastResetCheckedTaskIds(null);
       showNotification('Checks restaurados!');
       return;
     }
 
-    // Find currently completed tasks in this category
-    const completedIds = tasks
-      .filter((t) => (t.taskType || 'business') === taskCategory && t.completed)
-      .map((t) => t.id);
+    // Find currently completed tasks
+    const completedIds = tasks.filter((t) => t.completed).map((t) => t.id);
 
     if (completedIds.length === 0) {
       showNotification('Nenhuma tarefa marcada para desmarcar.');
       return;
     }
 
-    setTasks((prevTasks) => {
-      const updated = prevTasks.map((t) => {
-        const type = t.taskType || 'business';
-        if (type === taskCategory && t.completed) {
-          return { ...t, completed: false };
-        }
-        return t;
-      });
-      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updated));
-      return updated;
+    const updated = tasks.map((t) => {
+      if (t.completed) {
+        return { ...t, completed: false };
+      }
+      return t;
     });
-
+    saveTasks(updated);
     setLastResetCheckedTaskIds(completedIds);
     showNotification('Checks desmarcados! Clique novamente para restaurar.');
-  };
-
-  // Move a task immediately to today
-  const handleMoveTaskToToday = (taskId: string) => {
-    const today = getTodayIso();
-    setTasks((prevTasks) => {
-      const updated = prevTasks.map((t) => (t.id === taskId ? { ...t, date: today } : t));
-      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
-    showNotification('Tarefa colocada no dia de hoje!');
   };
 
   // Toggle urgent status for a task
@@ -548,57 +476,39 @@ export default function App() {
     return [];
   });
 
-  // Tasks State - automatically filtered to [-2 days, +7 days]
+  // Tasks State - automatically enforced to max 15 completed tasks
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
     try {
       const saved = localStorage.getItem(TASKS_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const normalized: TaskItem[] = parsed.map((t: TaskItem) => {
-            const isDaily = t.taskType === 'daily' || (!t.date && !t.project);
-            return {
-              ...t,
-              taskType: isDaily ? 'daily' : (t.taskType || 'business'),
-              project: isDaily ? undefined : t.project,
-              date: isDaily ? '' : (t.date || ''),
-            };
-          });
+          const normalized: TaskItem[] = parsed
+            .filter((t: any) => t && (t.title || t.id))
+            .map((t: TaskItem, idx: number) => ({
+              id: t.id || `task-${Date.now()}-${idx}`,
+              title: t.title,
+              project: t.project || undefined,
+              notes: t.notes || undefined,
+              completed: Boolean(t.completed),
+              urgent: Boolean(t.urgent),
+              subtasks: t.subtasks,
+              createdAt: typeof t.createdAt === 'number' ? t.createdAt : Date.now() - (parsed.length - idx) * 1000,
+            }));
 
-          // Se não houver nenhuma tarefa diária cadastrada, adiciona as diárias padrão
-          const hasDaily = normalized.some((t: TaskItem) => t.taskType === 'daily');
-          if (!hasDaily) {
-            normalized.push(
-              {
-                id: 'task-daily-1',
-                title: 'Responder mensagens e emails prioritários',
-                date: '',
-                completed: false,
-                taskType: 'daily',
-              },
-              {
-                id: 'task-daily-2',
-                title: 'Alinhar entregas da esteira de produção',
-                date: '',
-                completed: false,
-                taskType: 'daily',
-              }
-            );
-          }
-
-          return filterTasksWithinWindow(normalized);
+          return enforceMaxCompletedTasks(normalized);
         }
       }
     } catch {
       // Fallback
     }
-    return filterTasksWithinWindow(INITIAL_TASKS);
+    return enforceMaxCompletedTasks(INITIAL_TASKS);
   });
 
-  // Automatically prune tasks outside the [-2 days, +7 days] window on startup
+  // Automatically enforce max 15 completed tasks on startup
   useEffect(() => {
     setTasks((prev) => {
-      const pruned = filterTasksWithinWindow(prev);
+      const pruned = enforceMaxCompletedTasks(prev);
       if (pruned.length !== prev.length) {
         localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(pruned));
       }
@@ -802,9 +712,6 @@ export default function App() {
     showNotification('Compartilhando no WhatsApp...');
   };
 
-  // 7-day bar state for tasks: default is today!
-  const [selectedTaskDate, setSelectedTaskDate] = useState<string>(getTodayIso());
-
   // Prompts filters & Search State
   const [activeMediaFilter, setActiveMediaFilter] = useState<'imagem' | 'video'>('imagem');
   const [searchQuery, setSearchQuery] = useState('');
@@ -840,30 +747,7 @@ export default function App() {
   const [agentPrompt, setAgentPrompt] = useState('');
   const [isAgentLoading, setIsAgentLoading] = useState(false);
   const [agentSelectedProject, setAgentSelectedProject] = useState<string | null>(null);
-  const [agentSelectedDate, setAgentSelectedDate] = useState<string>(getTodayIso());
-  const agentDateInputRef = useRef<HTMLInputElement>(null);
 
-  // Flashlight hover effect for the AI Agent input box (matching PromptCard)
-  const agentBoxRef = useRef<HTMLDivElement>(null);
-  const [agentBoxMouse, setAgentBoxMouse] = useState({
-    x: 0,
-    y: 0,
-    isInteracting: false,
-  });
-
-  const handleAgentBoxMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!agentBoxRef.current) return;
-    const rect = agentBoxRef.current.getBoundingClientRect();
-    setAgentBoxMouse({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      isInteracting: true,
-    });
-  };
-
-  const handleAgentBoxMouseLeave = () => {
-    setAgentBoxMouse((prev) => ({ ...prev, isInteracting: false }));
-  };
 
   // Sucesso na adição de tarefa (anima a seta para check)
   const [isAgentSuccess, setIsAgentSuccess] = useState(false);
@@ -891,9 +775,9 @@ export default function App() {
     localStorage.setItem(PROMPTS_STORAGE_KEY, JSON.stringify(updated));
   };
 
-  // Sync tasks to storage (strictly within -2 days and +7 days)
+  // Sync tasks to storage (strictly enforcing max 15 completed tasks)
   const saveTasks = (updated: TaskItem[]) => {
-    const pruned = filterTasksWithinWindow(updated);
+    const pruned = enforceMaxCompletedTasks(updated);
     setTasks(pruned);
     localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(pruned));
   };
@@ -931,17 +815,15 @@ export default function App() {
     }
 
     const taskProject = agentSelectedProject || undefined;
-    const taskDate = agentSelectedDate || getTodayIso();
 
     const newTaskItem: TaskItem = {
       id: `task-${Date.now()}`,
       title,
-      taskType: 'business',
       project: taskProject,
-      date: taskDate,
       notes,
       urgent: agentIsUrgent,
       completed: false,
+      createdAt: Date.now(),
     };
 
     // Se o projeto foi digitado/especificado e ainda não existe nos salvos, adiciona
@@ -961,7 +843,6 @@ export default function App() {
     }, 2000);
 
     setAgentPrompt('');
-    setAgentSelectedProject(null);
     setAgentIsUrgent(false);
   };
 
@@ -1298,7 +1179,7 @@ export default function App() {
   const projectTaskCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     tasks.forEach((t) => {
-      if ((t.taskType || 'business') === 'business' && t.project && t.project.trim() !== '') {
+      if (t.project && t.project.trim() !== '') {
         const projName = t.project.trim();
         counts[projName] = (counts[projName] || 0) + 1;
       }
@@ -1306,32 +1187,22 @@ export default function App() {
     return counts;
   }, [tasks]);
 
-  // Filtered tasks (filtered by taskCategory and date; urgent tasks first; hideCompleted filter)
+  // Filtered tasks (filtered by project and search; urgent tasks first; hideCompleted filter)
   const filteredTasks = useMemo(() => {
     const list = tasks.filter((item) => {
-      const matchesCategory = (item.taskType || 'business') === taskCategory;
-      // Tarefas diárias não têm data e nunca devem filtrar por data — aparecem todas!
-      const matchesDate =
-        taskCategory === 'daily'
-          ? true
-          : selectedTaskDate === 'all' || item.date === selectedTaskDate;
-      const matchesProject =
-        taskCategory === 'daily' || !activeProjectFilter
-          ? true
-          : item.project === activeProjectFilter;
+      const matchesProject = !activeProjectFilter || item.project === activeProjectFilter;
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
         item.title.toLowerCase().includes(q) ||
-        (item.project && item.project.toLowerCase().includes(q)) ||
-        (item.taskType === 'daily' && 'daily'.includes(q));
+        (item.project && item.project.toLowerCase().includes(q));
 
       // Se o olho para ocultar tarefas com check estiver ativo, oculta
       if (hideCompletedTasks && item.completed) {
         return false;
       }
 
-      return matchesCategory && matchesDate && matchesProject && matchesSearch;
+      return matchesProject && matchesSearch;
     });
 
     // Sort:
@@ -1346,7 +1217,7 @@ export default function App() {
       }
       return 0;
     });
-  }, [tasks, selectedTaskDate, taskCategory, searchQuery, activeProjectFilter, hideCompletedTasks]);
+  }, [tasks, searchQuery, activeProjectFilter, hideCompletedTasks]);
 
   return (
     <div className="min-h-screen bg-[#0e0e0e] text-[#ececec] flex flex-col selection:bg-[#333338] selection:text-white font-sans antialiased overflow-x-hidden">
@@ -1518,41 +1389,26 @@ export default function App() {
                 )}
               </>
             ) : isTasks ? (
-              /* Seletor de Categorias de Tarefas (Projects vs Daily) sem quadrado englobando os dois */
+              /* Seletor de Projetos */
               <div className="flex items-center gap-1">
-                {/* Projects Tab com Dropdown */}
+                {/* Projects Filter Dropdown */}
                 <div
                   ref={projectDropdownRef}
                   className="relative"
-                  onMouseEnter={() => {
-                    if (taskCategory === 'business') {
-                      setIsProjectDropdownOpen(true);
-                    }
-                  }}
+                  onMouseEnter={() => setIsProjectDropdownOpen(true)}
                 >
                   <button
                     type="button"
                     id="tasks-category-btn-projects"
-                    onClick={() => {
-                      if (taskCategory !== 'business') {
-                        setTaskCategory('business');
-                        try {
-                          localStorage.setItem(TASK_TYPE_STORAGE_KEY, 'business');
-                        } catch {
-                          // Fallback
-                        }
-                      } else {
-                        setIsProjectDropdownOpen((prev) => !prev);
-                      }
-                    }}
+                    onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
                     className={`relative isolate flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer select-none ${
-                      taskCategory === 'business'
+                      activeProjectFilter
                         ? 'text-white font-semibold'
                         : 'text-zinc-400 hover:text-zinc-200'
                     }`}
-                    title="Tarefas de Projetos (Black)"
+                    title="Filtrar por projeto"
                   >
-                    {taskCategory === 'business' && (
+                    {activeProjectFilter && (
                       <motion.div
                         layoutId="tasks-category-active-slide"
                         transition={{ type: 'spring', stiffness: 450, damping: 35 }}
@@ -1574,24 +1430,23 @@ export default function App() {
                         transition={{ duration: 0.16, ease: 'easeOut' }}
                         className="absolute top-full left-0 mt-1.5 z-50 min-w-[210px] p-1.5 rounded-xl bg-[#0e0e11] border border-[#24242c] shadow-[0_16px_36px_rgba(0,0,0,0.95)] backdrop-blur-md"
                       >
-                        {/* Opção Todos os projetos no topo (sem número de contagem) */}
+                        {/* Opção Todos os projetos no topo */}
                         <button
                           type="button"
                           id="tasks-project-option-all"
                           onClick={() => {
-                            setTaskCategory('business');
                             setActiveProjectFilter(null);
                             setIsProjectDropdownOpen(false);
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer text-left ${
-                            activeProjectFilter === null && taskCategory === 'business'
+                            activeProjectFilter === null
                               ? 'bg-zinc-800/90 text-white font-semibold'
                               : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#18181f]'
                           }`}
                         >
                           <span className="truncate">Todos os projetos</span>
                           <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                            {activeProjectFilter === null && taskCategory === 'business' && (
+                            {activeProjectFilter === null && (
                               <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
                             )}
                           </div>
@@ -1602,10 +1457,10 @@ export default function App() {
                           <div className="w-full h-[1px] bg-[#22222a] my-1" />
                         )}
 
-                        {/* Lista dos projetos cadastrados (número sem círculo de background) */}
+                        {/* Lista dos projetos cadastrados */}
                         <div className="flex flex-col gap-0.5 max-h-60 overflow-y-auto pr-0.5">
                           {savedProjects.map((proj) => {
-                            const isSelected = activeProjectFilter === proj && taskCategory === 'business';
+                            const isSelected = activeProjectFilter === proj;
                             const count = projectTaskCounts[proj] || 0;
                             return (
                               <button
@@ -1613,7 +1468,6 @@ export default function App() {
                                 type="button"
                                 id={`tasks-proj-option-${proj.toLowerCase().replace(/\s+/g, '-')}`}
                                 onClick={() => {
-                                  setTaskCategory('business');
                                   setActiveProjectFilter(proj);
                                   setIsProjectDropdownOpen(false);
                                 }}
@@ -1640,37 +1494,6 @@ export default function App() {
                     )}
                   </AnimatePresence>
                 </div>
-
-                {/* Daily Tab */}
-                <button
-                  type="button"
-                  id="tasks-category-btn-daily"
-                  onClick={() => {
-                    setTaskCategory('daily');
-                    setActiveProjectFilter(null);
-                    setIsProjectDropdownOpen(false);
-                    try {
-                      localStorage.setItem(TASK_TYPE_STORAGE_KEY, 'daily');
-                    } catch {
-                      // Fallback
-                    }
-                  }}
-                  className={`relative isolate flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer select-none ${
-                    taskCategory === 'daily'
-                      ? 'text-white font-semibold'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                  title="Tarefas Diárias"
-                >
-                  {taskCategory === 'daily' && (
-                    <motion.div
-                      layoutId="tasks-category-active-slide"
-                      transition={{ type: 'spring', stiffness: 450, damping: 35 }}
-                      className="absolute inset-0 bg-[#202026]/30 border border-[#484856]/20 rounded-lg shadow-sm z-0 pointer-events-none"
-                    />
-                  )}
-                  <span className="relative z-10">Daily</span>
-                </button>
               </div>
             ) : isFuel ? (
               /* Página de calorias com header limpo sem botão de início */
@@ -1681,25 +1504,8 @@ export default function App() {
             )}
           </div>
 
-          {/* Right Actions: Olho (ocultar checks), Botão (+), Nuvem, WhatsApp Share, Wipe Data */}
+          {/* Right Actions: Botão (+), Nuvem, WhatsApp Share, Wipe Data */}
           <div className="flex items-center gap-2.5">
-            {/* Símbolo de Olho: Ao lado esquerdo do botão +, sem quadrado envolta, opacidade baixa quando oculto */}
-            {isTasks && !isMobile && (
-              <button
-                id="btn-tasks-hide-completed"
-                type="button"
-                onClick={handleToggleHideCompleted}
-                className={`p-1.5 transition-all duration-200 cursor-pointer shrink-0 ${
-                  hideCompletedTasks
-                    ? 'opacity-30 hover:opacity-60 text-zinc-400'
-                    : 'opacity-100 text-zinc-400 hover:text-white'
-                }`}
-                title={hideCompletedTasks ? 'Mostrar tarefas com check' : 'Ocultar tarefas com check'}
-              >
-                <Eye className="w-4 h-4" />
-              </button>
-            )}
-
             {/* Create Button (+): on Prompts and Tasks, on desktop only */}
             {!isWorkspace && !isFuel && !isMobile && (
               <button
@@ -1827,55 +1633,8 @@ export default function App() {
               <div className="w-full relative">
                 <form
                   onSubmit={handleAgentSubmit}
-                  ref={agentBoxRef}
-                  onMouseMove={handleAgentBoxMouseMove}
-                  onMouseEnter={() => setAgentBoxMouse((p) => ({ ...p, isInteracting: true }))}
-                  onMouseLeave={handleAgentBoxMouseLeave}
-                  className="relative w-full rounded-2xl bg-[#141416] border border-[#222226] hover:border-[#33333b] shadow-[0_8px_32px_rgba(0,0,0,0.6)] transition-all duration-300 overflow-hidden"
+                  className="relative w-full rounded-2xl bg-[#141416]/80 backdrop-blur-md border border-[#222226]/80 hover:border-[#33333b]/80 shadow-[0_8px_32px_rgba(0,0,0,0.6)] transition-all duration-300 overflow-hidden"
                 >
-                  {/* Contorno gradualmente ativo ao redor da caixa de texto */}
-                  <div
-                    className="absolute inset-0 rounded-2xl p-[1px] pointer-events-none z-10 overflow-hidden"
-                    style={{
-                      WebkitMask:
-                        'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                      WebkitMaskComposite: 'xor',
-                      maskComposite: 'exclude',
-                    }}
-                  >
-                    <div
-                      className="absolute -inset-[150%] w-[400%] h-[400%] m-auto animate-border-beam"
-                      style={{
-                        background:
-                          'conic-gradient(from 0deg, transparent 0deg, transparent 70deg, rgba(255, 255, 255, 0.65) 90deg, rgba(255, 255, 255, 0.12) 115deg, transparent 145deg, transparent 360deg)',
-                      }}
-                    />
-                  </div>
-
-                  {/* Flashlight interativo do cursor */}
-                  <div
-                    className="flashlight-layer absolute inset-0 rounded-2xl p-[1px] pointer-events-none z-10"
-                    style={{
-                      opacity: agentBoxMouse.isInteracting ? 1 : 0,
-                      background: `radial-gradient(320px circle at ${agentBoxMouse.x}px ${agentBoxMouse.y}px, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.08) 40%, transparent 75%)`,
-                      WebkitMask:
-                        'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                      WebkitMaskComposite: 'xor',
-                      maskComposite: 'exclude',
-                      transition: 'opacity 0.25s ease-out',
-                    }}
-                  />
-
-                  {/* Flashlight Ambient Surface Glow */}
-                  <div
-                    className="flashlight-layer absolute inset-0 pointer-events-none rounded-2xl z-0"
-                    style={{
-                      opacity: agentBoxMouse.isInteracting ? 1 : 0,
-                      background: `radial-gradient(360px circle at ${agentBoxMouse.x}px ${agentBoxMouse.y}px, rgba(255, 255, 255, 0.03), transparent 75%)`,
-                      transition: 'opacity 0.25s ease-out',
-                    }}
-                  />
-
                   {/* Clean textarea - estilo limpo sem bordas brancas de alta opacidade */}
                   <textarea
                     id="ai-agent-input"
@@ -1889,12 +1648,12 @@ export default function App() {
                     }}
                     placeholder="Add a task..."
                     rows={2}
-                    className="relative z-10 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-0 resize-none p-4 sm:p-5 pr-28 leading-relaxed font-sans"
+                    className="relative z-10 w-full bg-transparent text-sm sm:text-base text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-0 resize-none p-4 sm:p-5 pr-24 leading-relaxed font-sans"
                   />
 
-                  {/* Canto direito: efeito degradê + blur com botão de foguinho (urgente), calendário e seta para cima */}
+                  {/* Canto direito: efeito degradê + blur com botão de foguinho (urgente) e seta para cima */}
                   <div className="absolute right-3 bottom-3 z-20 flex items-center gap-1.5 pl-3 pr-1 py-1 rounded-full bg-gradient-to-l from-[#141416] via-[#141416]/90 to-transparent backdrop-blur-md">
-                    {/* Botão de Tarefa Urgente (Foguinho ao lado do calendário) */}
+                    {/* Botão de Tarefa Urgente (Foguinho) */}
                     <button
                       type="button"
                       id="btn-agent-urgent"
@@ -1908,55 +1667,6 @@ export default function App() {
                     >
                       <Flame className={`w-3.5 h-3.5 ${agentIsUrgent ? 'text-red-500 fill-red-500/30' : ''}`} />
                     </button>
-
-                    {/* Botão de Calendário: opacidade 89% sem brilho quando selecionado, exibindo apenas o dia */}
-                    <div className="relative flex items-center">
-                      <button
-                        type="button"
-                        id="btn-agent-calendar"
-                        onClick={() => {
-                          if (agentDateInputRef.current) {
-                            try {
-                              agentDateInputRef.current.showPicker();
-                            } catch {
-                              agentDateInputRef.current.click();
-                            }
-                          }
-                        }}
-                        className={`relative overflow-hidden w-8 h-8 rounded-full border transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 ${
-                          agentSelectedDate !== getTodayIso()
-                            ? 'opacity-[0.89] bg-[#1e1e24] border-zinc-400 text-white'
-                            : 'opacity-50 hover:opacity-85 bg-[#0e0e0e] border-[#202025] hover:border-[#383844] text-zinc-400 hover:text-zinc-200'
-                        }`}
-                        title={
-                          agentSelectedDate !== getTodayIso()
-                            ? `Data agendada: ${agentSelectedDate} (clique para alterar)`
-                            : 'Agendar data para a tarefa (abre calendário)'
-                        }
-                      >
-                        {agentSelectedDate !== getTodayIso() ? (
-                          <span className="text-[12px] font-semibold text-white select-none leading-none tracking-tight">
-                            {parseInt(agentSelectedDate.split('-')[2], 10) || agentSelectedDate.split('-')[2]}
-                          </span>
-                        ) : (
-                          <Calendar className="w-3.5 h-3.5" />
-                        )}
-                        {/* Input date nativo invisível que cobre o botão para abertura direta e imediata */}
-                        <input
-                          ref={agentDateInputRef}
-                          type="date"
-                          value={agentSelectedDate}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              setAgentSelectedDate(e.target.value);
-                            }
-                          }}
-                          className="absolute inset-0 w-full h-full opacity-0 pointer-events-auto cursor-pointer [color-scheme:dark]"
-                          tabIndex={-1}
-                          aria-label="Escolher data no calendário"
-                        />
-                      </button>
-                    </div>
 
                     {/* Seta para cima: vira check branco e botão adota a cor do box da tarefa ao adicionar */}
                     <button
@@ -2017,20 +1727,6 @@ export default function App() {
                     </button>
                   </div>
                 </form>
-
-                {/* Voltar para hoje quando uma data diferente estiver selecionada */}
-                {agentSelectedDate !== getTodayIso() && (
-                  <div className="flex items-center gap-1.5 mt-2 px-1">
-                    <button
-                      type="button"
-                      onClick={() => setAgentSelectedDate(getTodayIso())}
-                      className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 group/reset"
-                    >
-                      <RotateCcw className="w-3 h-3 text-zinc-500 group-hover/reset:text-zinc-300 group-hover/reset:-rotate-45 transition-transform" />
-                      <span>Voltar para hoje</span>
-                    </button>
-                  </div>
-                )}
               </div>
             </motion.div>
           ) : isPrompts ? (
@@ -2159,59 +1855,53 @@ export default function App() {
               }}
               className="w-full flex flex-col items-center"
             >
-              {/* Barra de Tarefas: Calendário no meio, Voltar Check na direita */}
-              <div className="w-full max-w-2xl mx-auto flex items-center justify-between mb-5 px-1">
-                {/* Lado Esquerdo: Espaçador equilibrado */}
-                <div className="w-8 sm:w-9 shrink-0" />
+              {/* Barra de Ações de Tarefas */}
+              <div className="w-full max-w-2xl mx-auto flex items-center justify-end gap-2 mb-4 px-1">
+                {/* Símbolo de Olho: Ao lado da seta, sem círculo em volta */}
+                <button
+                  id="btn-tasks-hide-completed"
+                  type="button"
+                  onClick={handleToggleHideCompleted}
+                  className={`p-1.5 transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 ${
+                    hideCompletedTasks
+                      ? 'opacity-30 hover:opacity-60 text-zinc-400'
+                      : 'opacity-100 text-zinc-300 hover:text-white'
+                  }`}
+                  title={hideCompletedTasks ? 'Mostrar tarefas com check' : 'Ocultar tarefas com check'}
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
 
-                {/* Meio: Calendário centralizado apenas na view Black (Negócios); nas tarefas diárias NÃO há datas */}
-                <div className="flex-1 flex justify-center px-2 min-h-[44px] items-center">
-                  <AnimatePresence mode="wait">
-                    {taskCategory === 'business' && (
-                      <WeekTaskbar
-                        key="business-week-taskbar"
-                        selectedDate={selectedTaskDate}
-                        onSelectDate={(d) => setSelectedTaskDate(d)}
-                        tasks={tasks}
-                      />
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Lado Direito: Símbolo de voltar check (apenas visível nas tarefas Diárias; oculto na view de Negócios) */}
-                {taskCategory !== 'business' ? (
-                  <button
-                    type="button"
-                    id="btn-reset-checks"
-                    onClick={handleResetCurrentCategoryChecks}
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#0e0e0e] border transition-all cursor-pointer flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.6)] shrink-0 ${
-                      lastResetCheckedTaskIds && lastResetCheckedTaskIds.length > 0
-                        ? 'border-zinc-300 bg-[#1e1e24] text-white'
-                        : 'border-[#202025] hover:border-[#383844] hover:bg-[#18181d] text-zinc-300 hover:text-white'
-                    }`}
-                    title={
-                      lastResetCheckedTaskIds && lastResetCheckedTaskIds.length > 0
-                        ? 'Restaurar checks das tarefas (clique para remarcar)'
-                        : 'Desmarcar checks das tarefas diárias (clique de novo para restaurar)'
-                    }
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                ) : (
-                  <div className="w-8 sm:w-9 shrink-0" />
-                )}
+                {/* Seta para desmarcar / restaurar checks */}
+                <button
+                  type="button"
+                  id="btn-reset-checks"
+                  onClick={handleResetCurrentCategoryChecks}
+                  className={`w-8 h-8 rounded-full bg-[#0e0e0e] border transition-all cursor-pointer flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.6)] shrink-0 ${
+                    lastResetCheckedTaskIds && lastResetCheckedTaskIds.length > 0
+                      ? 'border-zinc-300 bg-[#1e1e24] text-white'
+                      : 'border-[#202025] hover:border-[#383844] hover:bg-[#18181d] text-zinc-300 hover:text-white'
+                  }`}
+                  title={
+                    lastResetCheckedTaskIds && lastResetCheckedTaskIds.length > 0
+                      ? 'Restaurar checks das tarefas (clique para remarcar)'
+                      : 'Desmarcar checks de todas as tarefas (clique de novo para restaurar)'
+                  }
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
               </div>
 
-              {/* Lista das Tarefas: Animação de cima para baixo ao trocar de categoria e de data */}
+              {/* Lista das Tarefas */}
               <div className="w-full max-w-2xl mx-auto min-h-[60px]">
                 <AnimatePresence mode="wait">
-                  {filteredTasks.length > 0 && (
+                  {filteredTasks.length > 0 ? (
                     <motion.div
-                      key={`tasks-${taskCategory}-${selectedTaskDate}`}
-                      initial={{ opacity: 0, y: -24 }}
+                      key={`tasks-${activeProjectFilter || 'all'}`}
+                      initial={{ opacity: 0, y: -20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 16 }}
-                      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                       id="tasks-vertical-list"
                       className="w-full flex flex-col gap-3"
                     >
@@ -2223,7 +1913,6 @@ export default function App() {
                           savedProjects={savedProjects}
                           onEdit={handleOpenEditTask}
                           onToggleComplete={handleToggleCompleteTask}
-                          onMoveToToday={handleMoveTaskToToday}
                           onToggleUrgent={handleToggleUrgentTask}
                           onOpenSubtasks={(t) => setActiveSubtaskTaskId(t.id)}
                           onAddSubtask={handleAddSubtask}
@@ -2246,6 +1935,10 @@ export default function App() {
                         />
                       ))}
                     </motion.div>
+                  ) : (
+                    <div className="text-center py-14 text-zinc-500 text-sm">
+                      Nenhuma tarefa encontrada.
+                    </div>
                   )}
                 </AnimatePresence>
               </div>
@@ -2455,8 +2148,6 @@ export default function App() {
       <NewTaskModal
         isOpen={isNewTaskOpen}
         editingTask={editingTask}
-        defaultDate={selectedTaskDate}
-        defaultTaskType={taskCategory}
         savedProjects={savedProjects}
         onAddProject={handleAddProject}
         onDeleteProject={handleDeleteProject}

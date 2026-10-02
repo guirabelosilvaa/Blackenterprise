@@ -6,9 +6,6 @@ import {
   GripVertical,
   Check,
   Folder,
-  Calendar,
-  User,
-  Clock,
   Flame,
   ListTodo,
   Trash2,
@@ -19,7 +16,6 @@ interface TaskCardProps {
   index?: number;
   onEdit?: (task: TaskItem) => void;
   onToggleComplete?: (id: string) => void;
-  onMoveToToday?: (id: string) => void;
   onToggleUrgent?: (id: string) => void;
   onToggleSubtask?: (taskId: string, subtaskId: string) => void;
   onAddSubtask?: (taskId: string, title: string) => void;
@@ -45,7 +41,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   index = 0,
   onEdit,
   onToggleComplete,
-  onMoveToToday,
   onToggleUrgent,
   onToggleSubtask,
   onAddSubtask,
@@ -364,8 +359,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <GripVertical className="w-3.5 h-3.5" />
             </div>
 
-            {/* Projeto Tag (only for non-daily tasks, if project exists and is not deleted) */}
-            {task.taskType !== 'daily' && task.project && task.project.trim() !== '' && (!savedProjects || savedProjects.includes(task.project.trim())) && (
+            {/* Projeto Tag (if project exists and is not deleted) */}
+            {task.project && task.project.trim() !== '' && (!savedProjects || savedProjects.includes(task.project.trim())) && (
               <span
                 id={`task-project-badge-${task.id}`}
                 className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-md bg-[#1c1c20] text-zinc-300 border border-[#2b2b32] shadow-sm"
@@ -376,213 +371,142 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             )}
 
             {/* Número de subtarefas: x/x - hover mostra mini pop up para dar check sem lixeira, clique abre popup completo */}
-            {task.taskType !== 'daily' && (
-              (task.subtasks && task.subtasks.length > 0) ? (
-                <div
-                  className="relative inline-flex items-center"
-                  onMouseEnter={handleSubtasksMouseEnter}
-                  onMouseLeave={handleSubtasksMouseLeave}
+            {(task.subtasks && task.subtasks.length > 0) ? (
+              <div
+                className="relative inline-flex items-center"
+                onMouseEnter={handleSubtasksMouseEnter}
+                onMouseLeave={handleSubtasksMouseLeave}
+              >
+                <button
+                  type="button"
+                  id={`task-subtask-btn-${task.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSubtasksHoverOpen(false);
+                    if (onOpenSubtasks) onOpenSubtasks(task);
+                  }}
+                  className="inline-flex items-center px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#18181c] text-zinc-300 hover:text-white hover:bg-[#222228] border border-[#272730] hover:border-[#3a3a46] transition-colors shadow-sm select-none cursor-pointer"
+                  title="Clique para abrir e gerenciar subtarefas"
                 >
-                  <button
-                    type="button"
-                    id={`task-subtask-btn-${task.id}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsSubtasksHoverOpen(false);
-                      if (onOpenSubtasks) onOpenSubtasks(task);
-                    }}
-                    className="inline-flex items-center px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#18181c] text-zinc-300 hover:text-white hover:bg-[#222228] border border-[#272730] hover:border-[#3a3a46] transition-colors shadow-sm select-none cursor-pointer"
-                    title="Clique para abrir e gerenciar subtarefas"
-                  >
-                    <span>
-                      {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
-                    </span>
-                  </button>
+                  <span>
+                    {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
+                  </span>
+                </button>
 
-                  {/* Mini pop up on hover para dar check diretamente sem lixeira */}
-                  <AnimatePresence>
-                    {isSubtasksHoverOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 4, scale: 0.96 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 3, scale: 0.96 }}
-                        transition={{ duration: 0.15, ease: 'easeOut' }}
-                        onMouseEnter={handleSubtasksMouseEnter}
-                        onMouseLeave={handleSubtasksMouseLeave}
-                        className="absolute top-full left-0 pt-1.5 z-50 pointer-events-auto before:content-[''] before:absolute before:-top-3 before:left-0 before:right-0 before:h-4 before:pointer-events-auto"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="min-w-[220px] max-w-[280px] p-2.5 rounded-xl bg-[#09090b] border border-[#1f1f24] shadow-[0_16px_36px_rgba(0,0,0,0.95)] backdrop-blur-md">
-                          <div className="flex flex-col gap-1 max-h-[190px] overflow-y-auto pr-0.5">
-                            {task.subtasks.map((sub) => (
-                              <div
-                                key={sub.id}
-                                className="group/mini-sub flex items-center gap-2.5 py-1.5 px-2 hover:bg-white/[0.04] rounded-lg transition-colors cursor-pointer select-none"
+                {/* Mini pop up on hover para dar check diretamente sem lixeira */}
+                <AnimatePresence>
+                  {isSubtasksHoverOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 4, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 3, scale: 0.96 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
+                      onMouseEnter={handleSubtasksMouseEnter}
+                      onMouseLeave={handleSubtasksMouseLeave}
+                      className="absolute top-full left-0 pt-1.5 z-50 pointer-events-auto before:content-[''] before:absolute before:-top-3 before:left-0 before:right-0 before:h-4 before:pointer-events-auto"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="min-w-[220px] max-w-[280px] p-2.5 rounded-xl bg-[#09090b] border border-[#1f1f24] shadow-[0_16px_36px_rgba(0,0,0,0.95)] backdrop-blur-md">
+                        <div className="flex flex-col gap-1 max-h-[190px] overflow-y-auto pr-0.5">
+                          {task.subtasks.map((sub) => (
+                            <div
+                              key={sub.id}
+                              className="group/mini-sub flex items-center gap-2.5 py-1.5 px-2 hover:bg-white/[0.04] rounded-lg transition-colors cursor-pointer select-none"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onToggleSubtask) {
+                                  onToggleSubtask(task.id, sub.id);
+                                }
+                              }}
+                            >
+                              {/* Check Circle Button */}
+                              <button
+                                type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (onToggleSubtask) {
                                     onToggleSubtask(task.id, sub.id);
                                   }
                                 }}
+                                className="relative group/circle flex items-center justify-center w-4 h-4 shrink-0 rounded-full cursor-pointer select-none transition-all duration-200 outline-none"
                               >
-                                {/* Check Circle Button */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onToggleSubtask) {
-                                      onToggleSubtask(task.id, sub.id);
-                                    }
-                                  }}
-                                  className="relative group/circle flex items-center justify-center w-4 h-4 shrink-0 rounded-full cursor-pointer select-none transition-all duration-200 outline-none"
-                                >
-                                  {sub.completed ? (
-                                    <div className="w-full h-full rounded-full bg-emerald-500 border border-emerald-400 flex items-center justify-center shadow-[0_0_8px_rgba(16,185,129,0.35)]">
-                                      <Check className="w-2.5 h-2.5 text-white stroke-[3.2]" />
-                                    </div>
-                                  ) : (
-                                    <div className="relative w-full h-full flex items-center justify-center">
-                                      <svg
-                                        className="w-full h-full rotate-[-90deg] overflow-visible"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <circle
-                                          cx="12"
-                                          cy="12"
-                                          r="9"
-                                          stroke="#4a4a52"
-                                          strokeWidth="2"
-                                          fill="transparent"
-                                          className="transition-colors duration-200 group-hover/circle:stroke-zinc-300"
-                                        />
-                                        <circle
-                                          cx="12"
-                                          cy="12"
-                                          r="9"
-                                          stroke="#ffffff"
-                                          strokeWidth="2.2"
-                                          fill="transparent"
-                                          strokeDasharray="56.5"
-                                          strokeDashoffset="56.5"
-                                          strokeLinecap="round"
-                                          className="transition-all duration-300 ease-out group-hover/circle:stroke-dashoffset-0 group-hover/circle:opacity-100 opacity-0"
-                                        />
-                                      </svg>
-                                      <div className="absolute inset-0 rounded-full bg-white/0 group-hover/circle:bg-white/5 transition-colors pointer-events-none" />
-                                    </div>
-                                  )}
-                                </button>
+                                {sub.completed ? (
+                                  <div className="w-full h-full rounded-full bg-emerald-500 border border-emerald-400 flex items-center justify-center shadow-[0_0_8px_rgba(16,185,129,0.35)]">
+                                    <Check className="w-2.5 h-2.5 text-white stroke-[3.2]" />
+                                  </div>
+                                ) : (
+                                  <div className="relative w-full h-full flex items-center justify-center">
+                                    <svg
+                                      className="w-full h-full rotate-[-90deg] overflow-visible"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="9"
+                                        stroke="#4a4a52"
+                                        strokeWidth="2"
+                                        fill="transparent"
+                                        className="transition-colors duration-200 group-hover/circle:stroke-zinc-300"
+                                      />
+                                      <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="9"
+                                        stroke="#ffffff"
+                                        strokeWidth="2.2"
+                                        fill="transparent"
+                                        strokeDasharray="56.5"
+                                        strokeDashoffset="56.5"
+                                        strokeLinecap="round"
+                                        className="transition-all duration-300 ease-out group-hover/circle:stroke-dashoffset-0 group-hover/circle:opacity-100 opacity-0"
+                                      />
+                                    </svg>
+                                    <div className="absolute inset-0 rounded-full bg-white/0 group-hover/circle:bg-white/5 transition-colors pointer-events-none" />
+                                  </div>
+                                )}
+                              </button>
 
-                                {/* Título da subtarefa */}
-                                <span
-                                  className={`text-xs leading-snug break-words flex-1 min-w-0 transition-all ${
-                                    sub.completed
-                                      ? 'line-through text-zinc-500'
-                                      : 'text-zinc-200 group-hover/mini-sub:text-white'
-                                  }`}
-                                >
-                                  {sub.title}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
+                              {/* Título da subtarefa */}
+                              <span
+                                className={`text-xs leading-snug break-words flex-1 min-w-0 transition-all ${
+                                  sub.completed
+                                    ? 'line-through text-zinc-500'
+                                    : 'text-zinc-200 group-hover/mini-sub:text-white'
+                                }`}
+                              >
+                                {sub.title}
+                              </span>
+                            </div>
+                          ))}
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ) : isHovered ? (
-                <button
-                  type="button"
-                  id={`task-subtask-btn-${task.id}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onOpenSubtasks) onOpenSubtasks(task);
-                  }}
-                  className="inline-flex items-center px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#18181c] text-zinc-400 hover:text-white hover:bg-[#222228] border border-[#272730] hover:border-[#3a3a46] transition-colors shadow-sm select-none cursor-pointer"
-                  title="Adicionar subtarefas"
-                >
-                  <span>0/0</span>
-                </button>
-              ) : null
-            )}
-
-            {/* Daily Tag (para tarefas diárias) */}
-            {task.taskType === 'daily' && (
-              <span
-                id={`task-daily-badge-${task.id}`}
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-md bg-[#1c1c20] text-zinc-300 border border-[#2b2b32] shadow-sm"
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ) : isHovered ? (
+              <button
+                type="button"
+                id={`task-subtask-btn-${task.id}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onOpenSubtasks) onOpenSubtasks(task);
+                }}
+                className="inline-flex items-center px-2 py-0.5 text-[11px] font-mono font-medium rounded-md bg-[#18181c] text-zinc-400 hover:text-white hover:bg-[#222228] border border-[#272730] hover:border-[#3a3a46] transition-colors shadow-sm select-none cursor-pointer"
+                title="Adicionar subtarefas"
               >
-                <User className="w-3 h-3 text-zinc-400" />
-                <span>Daily</span>
-              </span>
-            )}
-
-            {/* Horário ou Obs on hover para tarefas diárias: sem prefixo obs:, exibindo a frase inteira */}
-            {task.taskType === 'daily' && (task.time || (task.notes && task.notes.trim() !== '')) && (() => {
-              const cleanNotes = task.notes
-                ? task.notes.replace(/^(?:obs\s*:?|observa[çc][ãa]o\s*:?|nota\s*:?)\s*/i, '').trim()
-                : '';
-              return (
-                <span
-                  id={`task-daily-meta-${task.id}`}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-md bg-[#18181c] text-zinc-300 border border-[#272730] transition-all duration-200 ${
-                    isHovered
-                      ? 'opacity-100 translate-x-0'
-                      : 'opacity-0 -translate-x-1 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0'
-                  }`}
-                  title={cleanNotes || (task.time ? `Horário: ${task.time}` : '')}
-                >
-                  {task.time && <Clock className="w-2.5 h-2.5 text-zinc-400 shrink-0" />}
-                  {task.time && <span className="font-mono text-[10px] text-zinc-400 shrink-0">{task.time}</span>}
-                  {task.time && cleanNotes && <span className="text-zinc-600 shrink-0">•</span>}
-                  {cleanNotes && <span className="text-zinc-300 font-normal leading-tight">{cleanNotes}</span>}
-                </span>
-              );
-            })()}
+                <span>0/0</span>
+              </button>
+            ) : null}
           </div>
 
-          {/* Right: Data + Símbolo de calendário (colocar no dia de hoje) + Lápis (Edit action) */}
+          {/* Right: Lápis (Edit action) */}
           <div
             className="flex items-center gap-1 sm:gap-1.5"
             draggable={false}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {/* Data on hover: aparece ao lado do calendário na ordem [data] [calendário] */}
-            {task.taskType !== 'daily' && task.date && (
-              <span
-                id={`task-date-hover-${task.id}`}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md bg-[#18181c] text-zinc-300 border border-[#272730] transition-all duration-200 select-none ${
-                  isHovered
-                    ? 'opacity-100 translate-x-0 pointer-events-auto'
-                    : 'opacity-70 sm:opacity-0 -translate-x-1 sm:scale-95 pointer-events-auto sm:pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 group-hover:scale-100 group-hover:pointer-events-auto'
-                }`}
-                title={`Data: ${task.date}`}
-              >
-                <span>{formatDateShort(task.date)}</span>
-              </span>
-            )}
-
-            {/* Calendário: move a tarefa de negócio automaticamente para o dia de hoje (diárias não têm data nem este ícone) */}
-            {task.taskType !== 'daily' && onMoveToToday && (
-              <button
-                type="button"
-                id={`btn-move-today-${task.id}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMoveToToday(task.id);
-                }}
-                className={`p-2 sm:p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-[#222227] transition-all cursor-pointer ${
-                  isHovered
-                    ? 'opacity-100 scale-100 pointer-events-auto'
-                    : 'opacity-70 sm:opacity-0 scale-95 sm:scale-90 pointer-events-auto sm:pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto'
-                }`}
-                title="Colocar no dia de hoje"
-              >
-                <Calendar className="w-3.5 h-3.5" />
-              </button>
-            )}
-
             {onEdit && (
               <button
                 id={`btn-edit-task-${task.id}`}
@@ -596,7 +520,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         </div>
 
-        {/* 4. CARD BODY: Title (Tarefa) */}
+        {/* 4. CARD BODY: Title + Notes (Tarefa) */}
         <div className="relative z-30 flex flex-col flex-1">
           <h3
             id={`task-title-${task.id}`}
@@ -613,6 +537,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           >
             {task.title}
           </h3>
+          {task.notes && task.notes.trim() !== '' && (
+            <p className="text-xs text-zinc-400 mt-1 line-clamp-2 leading-relaxed">
+              {task.notes}
+            </p>
+          )}
         </div>
       </div>
 
