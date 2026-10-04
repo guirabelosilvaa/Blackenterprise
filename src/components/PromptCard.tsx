@@ -6,7 +6,6 @@ import {
   Video,
   Copy,
   Check,
-  Pencil,
   GripVertical,
   Layers,
 } from 'lucide-react';
@@ -113,13 +112,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({
       setTimeout(() => setCopiedQuick(false), 2200);
     } catch {
       onSelect(prompt);
-    }
-  };
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onEdit) {
-      onEdit(prompt);
     }
   };
 
@@ -256,24 +248,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({
               <span>{prompt.mediaLabel}</span>
             </span>
           </div>
-
-          {/* Action icon: Edit */}
-          <div
-            className="flex items-center gap-1"
-            draggable={false}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            {onEdit && (
-              <button
-                id={`btn-edit-${prompt.id}`}
-                onClick={handleEdit}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-[#222227] transition-all cursor-pointer"
-                title="Editar prompt"
-              >
-                <Pencil className="w-3.5 h-3.5 text-white" />
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Card Body: Title and Text Preview */}
@@ -302,14 +276,10 @@ export const PromptCard: React.FC<PromptCardProps> = ({
             {prompt.template}
           </p>
 
-          {/* Foto JPEG: posicionada debaixo do texto, aparece ao passar o mouse no card */}
+          {/* Foto JPEG: posicionada debaixo do texto, sempre visível quando houver link */}
           {prompt.imageUrl && (
             <div
-              className={`relative overflow-hidden rounded-xl bg-[#09090b] transition-all duration-300 ease-out ${
-                isHovered
-                  ? 'mt-3 max-h-52 opacity-100 scale-100 border border-[#2c2c36] shadow-lg'
-                  : 'mt-0 max-h-0 opacity-0 scale-95 border-transparent pointer-events-none group-hover:mt-3 group-hover:max-h-52 group-hover:opacity-100 group-hover:scale-100 group-hover:border-[#2c2c36] group-hover:shadow-lg'
-              }`}
+              className="relative overflow-hidden rounded-xl bg-[#09090b] mt-3 max-h-52 opacity-100 scale-100 border border-[#2c2c36] shadow-md transition-all duration-300 ease-out"
               style={{
                 transform: mouseCoords.isInteracting
                   ? 'translateZ(8px)'
@@ -329,9 +299,9 @@ export const PromptCard: React.FC<PromptCardProps> = ({
           )}
         </div>
 
-        {/* Card Footer: Variáveis no canto esquerdo e Botão de Copiar no canto direito */}
+        {/* Card Footer: Botão de Copiar no canto direito */}
         <div
-          className="relative z-30 pt-2.5 border-t border-[#202024] flex items-center justify-between text-xs transition-transform duration-100"
+          className="relative z-30 pt-2.5 border-t border-[#202024] flex items-center justify-end text-xs transition-transform duration-100"
           style={{
             transform: mouseCoords.isInteracting
               ? 'translateZ(8px)'
@@ -340,20 +310,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({
           draggable={false}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {/* Canto esquerdo inferior: número de variação */}
-          <div className="flex items-center">
-            {prompt.variables.length > 0 ? (
-              <span className="text-[11px] font-mono text-zinc-400 bg-[#17171a] px-2 py-0.5 rounded border border-[#242429]">
-                {prompt.variables.length}{' '}
-                {prompt.variables.length === 1 ? 'variação' : 'variações'}
-              </span>
-            ) : (
-              <span className="text-[11px] font-mono text-zinc-600">
-                0 variações
-              </span>
-            )}
-          </div>
-
           {/* Canto direito inferior: Metallic Copy Button */}
           <button
             id={`btn-copy-icon-${prompt.id}`}
